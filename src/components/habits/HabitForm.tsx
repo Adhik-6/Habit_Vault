@@ -1,0 +1,410 @@
+import { Buttons, Cards, Inputs, Text as T } from '@design/components';
+import { Colors, Spacing } from '@design/tokens';
+import { Ionicons } from '@expo/vector-icons';
+import { createHabit, updateHabit } from '@services/habitService';
+import { BottomSheet, type BottomSheetRef } from '@src/components/common/BottomSheet';
+import type { CompositeStep, FrequencyRule, Habit, HabitType } from '@src/types';
+import { generateId } from '@src/utils/idUtils';
+import { useHabitStore } from '@store/useHabitStore';
+import * as Haptics from 'expo-haptics';
+import React, { useRef, useState } from 'react';
+import {
+  Alert,
+  Text, TextInput, TouchableOpacity,
+  View
+} from 'react-native';
+
+// ── Colour palette ────────────────────────────────────────────────────────────
+const COLORS = [
+  '#6366F1', '#EC4899', '#F59E0B', '#10B981',
+  '#38BDF8', '#A855F7', '#EF4444', '#84CC16',
+  '#F97316', '#06B6D4',
+];
+
+// ── Type option ───────────────────────────────────────────────────────────────
+const TYPES: { value: HabitType; label: string; icon: string }[] = [
+  { value: 'boolean', label: 'Done/Not Done', icon: 'checkmark-circle-outline' },
+  { value: 'quantity', label: 'Measurable', icon: 'bar-chart-outline' },
+  { value: 'duration', label: 'Duration', icon: 'timer-outline' },
+  { value: 'composite', label: 'Checklist', icon: 'list-outline' },
+];
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// ── Form state ────────────────────────────────────────────────────────────────
+interface FormState {
+  name: string;
+  description: string;
+  type: HabitType;
+  targetValue: string;
+  unit: string;
+  color: string;
+  frequencyType: 'daily' | 'weekly';
+  selectedDays: number[];
+  compositeSteps: CompositeStep[];
+  stackId: string | null;
+}
+
+function defaultForm(): FormState {
+  return {
+    name: '',
+    description: '',
+    type: 'boolean',
+    targetValue: '1',
+    unit: '',
+    color: '#6366F1',
+    frequencyType: 'daily',
+    selectedDays: [1, 2, 3, 4, 5],
+    compositeSteps: [],
+    stackId: null,
+  };
+}
+
+function habitToForm(habit: Habit): FormState {
+  return {
+    name: habit.name,
+    description: habit.description,
+    type: habit.type,
+    targetValue: String(habit.targetValue),
+    unit: habit.unit,
+    color: habit.color,
+    frequencyType: habit.frequencyRules.type === 'daily' ? 'daily' : 'weekly',
+    selectedDays: habit.frequencyRules.daysOfWeek ?? [1, 2, 3, 4, 5],
+    compositeSteps: habit.compositeSteps,
+    stackId: habit.stackId,
+  };
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+export interface HabitFormRef {
+  openCreate: () => void;
+  openEdit: (habit: Habit) => void;
+}
+
+interface HabitFormProps {
+  onSaved?: () => void;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
+  ({ onSaved }, ref) => {
+    const sheetRef = useRef<BottomSheetRef>(null);
+    const [form, setForm] = useState<FormState>(defaultForm());
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [newStepText, setNewStepText] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    const loadHabits = useHabitStore((s) => s.loadHabits);
+    const stacks = useHabitStore((s) => s.stacks);
+
+    React.useImperativeHandle(ref, () => ({
+      openCreate: () => {
+        setForm(defaultForm());
+        setEditingId(null);
+        sheetRef.current?.open();
+      },
+      openEdit: (habit: Habit) => {
+        setForm(habitToForm(habit));
+        setEditingId(habit.id);
+        sheetRef.current?.open();
+      },
+    }));
+
+    const update = (patch: Partial<FormState>) =>
+      setForm((prev) => ({ ...prev, ...patch }));
+
+    const toggleDay = (day: number) => {
+      const days = form.selectedDays.includes(day)
+        ? form.selectedDays.filter((d) => d !== day)
+        : [...form.selectedDays, day];
+      update({ selectedDays: days });
+    };
+
+    const addStep = () => {
+      const text = newStepText.trim();
+      if (!text) return;
+      const step: CompositeStep = {
+        id: generateId(),
+        title: text,
+        order: form.compositeSteps.length,
+      };
+      update({ compositeSteps: [...form.compositeSteps, step] });
+      setNewStepText('');
+    };
+
+    const removeStep = (id: string) =>
+      update({ compositeSteps: form.compositeSteps.filter((s) => s.id !== id) });
+
+    const handleSave = async () => {
+      if (!form.name.trim()) {
+        Alert.alert('Name required', 'Please enter a name for this habit.');
+        return;
+      }
+      setSaving(true);
+      try {
+        const frequencyRules: FrequencyRule =
+          form.frequencyType === 'daily'
+            ? { type: 'daily' }
+            : { type: 'weekly', daysOfWeek: form.selectedDays };
+
+        const payload = {
+          name: form.name.trim(),
+          description: form.description.trim(),
+          type: form.type,
+          targetValue: parseFloat(form.targetValue) || 1,
+          unit: form.unit.trim(),
+          color: form.color,
+          frequencyRules,
+          compositeSteps: form.compositeSteps,
+          stackId: form.stackId,
+        };
+
+        if (editingId) {
+          await updateHabit(editingId, payload);
+        } else {
+          await createHabit(payload);
+        }
+
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await loadHabits();
+        sheetRef.current?.close();
+        onSaved?.();
+      } catch (e: any) {
+        Alert.alert('Error', e.message);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <BottomSheet
+        ref={sheetRef}
+        title={editingId ? 'Edit Habit' : 'New Habit'}
+      >
+        <View style={{ gap: Spacing[4], paddingBottom: Spacing[8] }}>
+
+          {/* Name */}
+          <View>
+            <Text style={[T.label, { marginBottom: Spacing[2] }]}>Name</Text>
+            <TextInput
+              style={Inputs.base}
+              value={form.name}
+              onChangeText={(name) => update({ name })}
+              placeholder="e.g. Morning Run"
+              placeholderTextColor={Colors.textDim}
+              autoFocus
+              returnKeyType="next"
+            />
+          </View>
+
+          {/* Description */}
+          <View>
+            <Text style={[T.label, { marginBottom: Spacing[2] }]}>Description (optional)</Text>
+            <TextInput
+              style={Inputs.base}
+              value={form.description}
+              onChangeText={(description) => update({ description })}
+              placeholder="What's this habit about?"
+              placeholderTextColor={Colors.textDim}
+            />
+          </View>
+
+          {/* Type selector */}
+          <View>
+            <Text style={[T.label, { marginBottom: Spacing[2] }]}>Type</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing[2] }}>
+              {TYPES.map((t) => (
+                <TouchableOpacity
+                  key={t.value}
+                  onPress={() => update({ type: t.value })}
+                  style={[Cards.compact, {
+                    flexDirection: 'row', alignItems: 'center', gap: Spacing[2],
+                    borderColor: form.type === t.value ? Colors.accent : Colors.border,
+                    backgroundColor: form.type === t.value ? Colors.accentMuted : Colors.surface,
+                    paddingVertical: Spacing[2], paddingHorizontal: Spacing[3],
+                  }]}
+                >
+                  <Ionicons
+                    name={t.icon as any}
+                    size={16}
+                    color={form.type === t.value ? Colors.accentGlow : Colors.textMuted}
+                  />
+                  <Text style={[T.sm, { color: form.type === t.value ? Colors.accentGlow : Colors.textSecondary }]}>
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Target value + unit (quantity / duration) */}
+          {(form.type === 'quantity' || form.type === 'duration') && (
+            <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[T.label, { marginBottom: Spacing[2] }]}>
+                  {form.type === 'duration' ? 'Target (minutes)' : 'Target amount'}
+                </Text>
+                <TextInput
+                  style={Inputs.base}
+                  value={form.targetValue}
+                  onChangeText={(targetValue) => update({ targetValue })}
+                  keyboardType="numeric"
+                  placeholder="1"
+                  placeholderTextColor={Colors.textDim}
+                />
+              </View>
+              {form.type === 'quantity' && (
+                <View style={{ flex: 1 }}>
+                  <Text style={[T.label, { marginBottom: Spacing[2] }]}>Unit</Text>
+                  <TextInput
+                    style={Inputs.base}
+                    value={form.unit}
+                    onChangeText={(unit) => update({ unit })}
+                    placeholder="ml, pages, km…"
+                    placeholderTextColor={Colors.textDim}
+                  />
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Composite steps */}
+          {form.type === 'composite' && (
+            <View>
+              <Text style={[T.label, { marginBottom: Spacing[2] }]}>Checklist Steps</Text>
+              {form.compositeSteps.map((step) => (
+                <View key={step.id} style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2], marginBottom: Spacing[2] }}>
+                  <View style={{ flex: 1, ...Cards.compact as any, paddingVertical: Spacing[2] }}>
+                    <Text style={T.sm}>{step.title}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeStep(step.id)}>
+                    <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <View style={{ flexDirection: 'row', gap: Spacing[2] }}>
+                <TextInput
+                  style={[Inputs.base, { flex: 1 }]}
+                  value={newStepText}
+                  onChangeText={setNewStepText}
+                  placeholder="Add step…"
+                  placeholderTextColor={Colors.textDim}
+                  onSubmitEditing={addStep}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity onPress={addStep} style={[Buttons.icon, { backgroundColor: Colors.accentMuted, borderColor: Colors.accentDim }]}>
+                  <Ionicons name="add" size={20} color={Colors.accentGlow} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Frequency */}
+          <View>
+            <Text style={[T.label, { marginBottom: Spacing[2] }]}>Frequency</Text>
+            <View style={{ flexDirection: 'row', gap: Spacing[2], marginBottom: Spacing[3] }}>
+              {(['daily', 'weekly'] as const).map((ft) => (
+                <TouchableOpacity
+                  key={ft}
+                  onPress={() => update({ frequencyType: ft })}
+                  style={[Cards.compact, {
+                    flex: 1, alignItems: 'center',
+                    borderColor: form.frequencyType === ft ? Colors.accent : Colors.border,
+                    backgroundColor: form.frequencyType === ft ? Colors.accentMuted : Colors.surface,
+                  }]}
+                >
+                  <Text style={[T.sm, { color: form.frequencyType === ft ? Colors.accentGlow : Colors.textSecondary, textTransform: 'capitalize' }]}>
+                    {ft}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {form.frequencyType === 'weekly' && (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                {DAYS.map((d, i) => {
+                  const active = form.selectedDays.includes(i);
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => toggleDay(i)}
+                      style={{
+                        width: 38, height: 38, borderRadius: 19,
+                        backgroundColor: active ? Colors.accent : Colors.surfaceElevated,
+                        borderWidth: 1, borderColor: active ? Colors.accent : Colors.border,
+                        alignItems: 'center', justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={[T.xs, { color: active ? '#fff' : Colors.textMuted }]}>{d[0]}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {/* Colour picker */}
+          <View>
+            <Text style={[T.label, { marginBottom: Spacing[2] }]}>Colour</Text>
+            <View style={{ flexDirection: 'row', gap: Spacing[3], flexWrap: 'wrap', marginStart: Spacing[2] }}>
+              {COLORS.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  onPress={() => update({ color: c })}
+                  style={{
+                    width: 32, height: 32, borderRadius: 16,
+                    backgroundColor: c,
+                    borderWidth: form.color === c ? 3 : 0,
+                    borderColor: '#fff',
+                    transform: [{ scale: form.color === c ? 1.15 : 1 }],
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* Stack assignment */}
+          {stacks.length > 0 && (
+            <View>
+              <Text style={[T.label, { marginBottom: Spacing[2] }]}>Stack (optional)</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing[2] }}>
+                <TouchableOpacity
+                  onPress={() => update({ stackId: null })}
+                  style={[Cards.compact, {
+                    borderColor: form.stackId === null ? Colors.accent : Colors.border,
+                    backgroundColor: form.stackId === null ? Colors.accentMuted : Colors.surface,
+                  }]}
+                >
+                  <Text style={[T.sm, { color: form.stackId === null ? Colors.accentGlow : Colors.textMuted }]}>None</Text>
+                </TouchableOpacity>
+                {stacks.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => update({ stackId: s.id })}
+                    style={[Cards.compact, {
+                      borderColor: form.stackId === s.id ? Colors.accent : Colors.border,
+                      backgroundColor: form.stackId === s.id ? Colors.accentMuted : Colors.surface,
+                    }]}
+                  >
+                    <Text style={[T.sm, { color: form.stackId === s.id ? Colors.accentGlow : Colors.textSecondary }]}>{s.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Save button */}
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={saving}
+            style={[Buttons.primary, { opacity: saving ? 0.6 : 1 }]}
+          >
+            <Ionicons name={editingId ? 'save-outline' : 'add-circle-outline'} size={18} color="#fff" />
+            <Text style={[T.bodyMedium, { color: '#fff' }]}>
+              {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create Habit'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
+    );
+  },
+);
