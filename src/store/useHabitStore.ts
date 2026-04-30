@@ -4,16 +4,17 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { getHabits } from '../services/habitService';
 import { getLogsForDate, getLogsForHabit, logHabit, toggleBooleanHabit, toggleCompositeStep } from '../services/logService';
-import { getStacks } from '../services/stackService';
-import type { Habit, HabitLog, Stack, StreakData } from '../types';
+import { getCategories } from '../services/categoryService';
+import type { Habit, HabitLog, Category, StreakData } from '../types';
 import { computeHabitStrengthScore, computeStreak } from '../utils/analytics';
 import { getLast30Days, toDateString } from '../utils/dateUtils';
+import { useAnalyticsStore } from './useAnalyticsStore';
 
 // ── State Shape ─────────────────────────────────────────────────────────────
 
 interface HabitState {
   habits: Habit[];
-  stacks: Stack[];
+  categories: Category[];
   selectedDate: string;
   todayLogsMap: Map<string, HabitLog>;
   streakCache: Map<string, StreakData>;
@@ -45,7 +46,7 @@ export const useHabitStore = create<HabitStore>()(
   subscribeWithSelector((set, get) => ({
     // ── Initial state
     habits: [],
-    stacks: [],
+    categories: [],
     selectedDate: toDateString(),
     todayLogsMap: new Map(),
     streakCache: new Map(),
@@ -57,9 +58,10 @@ export const useHabitStore = create<HabitStore>()(
     loadHabits: async () => {
       set({ isLoading: true, error: null });
       try {
-        const [habits, stacks] = await Promise.all([getHabits(), getStacks()]);
-        set({ habits, stacks });
+        const [habits, categories] = await Promise.all([getHabits(), getCategories()]);
+        set({ habits, categories });
         await get().loadLogsForDate(get().selectedDate);
+        useAnalyticsStore.getState().recomputeAll();
       } catch (e) {
         set({ error: String(e) });
       } finally {
@@ -87,6 +89,7 @@ export const useHabitStore = create<HabitStore>()(
         newMap.set(habitId, updated);
         return { todayLogsMap: newMap };
       });
+      useAnalyticsStore.getState().recomputeAll();
     },
 
     logQuantityHabit: async (habitId: string, value: number, notes?: string) => {
@@ -105,6 +108,7 @@ export const useHabitStore = create<HabitStore>()(
         newMap.set(habitId, updated);
         return { todayLogsMap: newMap };
       });
+      useAnalyticsStore.getState().recomputeAll();
     },
 
     logDurationHabit: async (habitId: string, seconds: number) => {
@@ -124,6 +128,7 @@ export const useHabitStore = create<HabitStore>()(
         newMap.set(habitId, updated);
         return { todayLogsMap: newMap };
       });
+      useAnalyticsStore.getState().recomputeAll();
     },
 
     toggleCompositeStep: async (habitId: string, stepId: string) => {
@@ -140,6 +145,7 @@ export const useHabitStore = create<HabitStore>()(
         newMap.set(habitId, updated);
         return { todayLogsMap: newMap };
       });
+      useAnalyticsStore.getState().recomputeAll();
     },
 
     // ❌ REMOVED: The computed selectors from the store definition

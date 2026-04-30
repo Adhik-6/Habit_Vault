@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Keyboard } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, interpolate, runOnJS,
 } from 'react-native-reanimated';
@@ -20,6 +20,8 @@ interface HabitCardProps {
 
 export function HabitCard({ habit, onLongPress }: HabitCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const [showDurationInput, setShowDurationInput] = useState(false);
+  const [durationMinutes, setDurationMinutes] = useState('');
 
   const toggleHabit = useHabitStore((s) => s.toggleHabit);
   const logQuantityHabit = useHabitStore((s) => s.logQuantityHabit);
@@ -74,6 +76,17 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
   const handleCompositeStep = async (stepId: string) => {
     Haptics.selectionAsync();
     await toggleCompositeStepAction(habit.id, stepId);
+  };
+
+  const handleDurationSubmit = async () => {
+    Keyboard.dismiss();
+    const mins = parseInt(durationMinutes, 10);
+    if (!isNaN(mins) && mins > 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await logDurationHabit(habit.id, mins * 60);
+    }
+    setShowDurationInput(false);
+    setDurationMinutes('');
   };
 
   const bgColor = habit.isCompleted ? Colors.accentMuted : Colors.surface;
@@ -181,7 +194,10 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
             {habit.type === 'duration' && (
               <TouchableOpacity
                 style={[Buttons.icon, { backgroundColor: Colors.accentMuted, borderColor: Colors.accentDim }]}
-                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowDurationInput((v) => !v);
+                }}
               >
                 <Ionicons
                   name={habit.isCompleted ? 'checkmark-circle' : 'timer-outline'}
@@ -216,6 +232,24 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
                 backgroundColor: habit.isCompleted ? Colors.success : Colors.accent,
                 borderRadius: 2,
               }} />
+            </View>
+          )}
+
+          {/* ── Duration Input ── */}
+          {habit.type === 'duration' && showDurationInput && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing[3], gap: Spacing[2] }}>
+              <TextInput
+                value={durationMinutes}
+                onChangeText={setDurationMinutes}
+                placeholder="Minutes completed..."
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="numeric"
+                style={{ flex: 1, backgroundColor: Colors.surface, color: Colors.text, padding: Spacing[2], borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border }}
+                autoFocus
+              />
+              <TouchableOpacity onPress={handleDurationSubmit} style={{ backgroundColor: Colors.accent, paddingHorizontal: Spacing[3], paddingVertical: Spacing[2], borderRadius: Radius.sm }}>
+                <Text style={[T.sm, { color: '#fff' }]}>Log</Text>
+              </TouchableOpacity>
             </View>
           )}
 

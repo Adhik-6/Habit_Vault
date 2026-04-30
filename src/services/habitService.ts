@@ -16,7 +16,7 @@ interface HabitRow {
   frequencyRules: string;
   color: string;
   icon: string;
-  stackId: string | null;
+  categoryId: string | null;
   compositeSteps: string;
   createdAt: string;
   archivedAt: string | null;
@@ -48,11 +48,11 @@ export async function getHabitById(id: string): Promise<Habit | null> {
   return row ? rowToHabit(row) : null;
 }
 
-export async function getHabitsByStack(stackId: string): Promise<Habit[]> {
+export async function getHabitsByCategory(categoryId: string): Promise<Habit[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<HabitRow>(
-    'SELECT * FROM habits WHERE stackId = ? AND archivedAt IS NULL ORDER BY sortOrder ASC',
-    [stackId],
+    'SELECT * FROM habits WHERE categoryId = ? AND archivedAt IS NULL ORDER BY sortOrder ASC',
+    [categoryId],
   );
   return rows.map(rowToHabit);
 }
@@ -68,7 +68,7 @@ export interface CreateHabitInput {
   frequencyRules?: FrequencyRule;
   color?: string;
   icon?: string;
-  stackId?: string | null;
+  categoryId?: string | null;
   compositeSteps?: Habit['compositeSteps'];
   sortOrder?: number;
 }
@@ -85,7 +85,7 @@ export async function createHabit(input: CreateHabitInput): Promise<Habit> {
     frequencyRules: input.frequencyRules ?? { type: 'daily' },
     color: input.color ?? '#6366F1',
     icon: input.icon ?? 'star',
-    stackId: input.stackId ?? null,
+    categoryId: input.categoryId ?? null,
     compositeSteps: input.compositeSteps ?? [],
     createdAt: new Date().toISOString(),
     archivedAt: null,
@@ -95,12 +95,12 @@ export async function createHabit(input: CreateHabitInput): Promise<Habit> {
   await db.runAsync(
     `INSERT INTO habits
       (id, name, description, type, targetValue, unit, frequencyRules,
-       color, icon, stackId, compositeSteps, createdAt, archivedAt, sortOrder)
+       color, icon, categoryId, compositeSteps, createdAt, archivedAt, sortOrder)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       habit.id, habit.name, habit.description, habit.type,
       habit.targetValue, habit.unit, JSON.stringify(habit.frequencyRules),
-      habit.color, habit.icon, habit.stackId,
+      habit.color, habit.icon, habit.categoryId,
       JSON.stringify(habit.compositeSteps), habit.createdAt,
       habit.archivedAt, habit.sortOrder,
     ],
@@ -123,7 +123,7 @@ export async function updateHabit(id: string, input: UpdateHabitInput): Promise<
   if (input.frequencyRules !== undefined) { fields.push('frequencyRules = ?'); values.push(JSON.stringify(input.frequencyRules)); }
   if (input.color !== undefined) { fields.push('color = ?'); values.push(input.color); }
   if (input.icon !== undefined) { fields.push('icon = ?'); values.push(input.icon); }
-  if (input.stackId !== undefined) { fields.push('stackId = ?'); values.push(input.stackId); }
+  if (input.categoryId !== undefined) { fields.push('categoryId = ?'); values.push(input.categoryId); }
   if (input.compositeSteps !== undefined) { fields.push('compositeSteps = ?'); values.push(JSON.stringify(input.compositeSteps)); }
   if (input.sortOrder !== undefined) { fields.push('sortOrder = ?'); values.push(input.sortOrder); }
 

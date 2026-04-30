@@ -10,7 +10,7 @@ import type {
 import { getAllHabitsRaw } from './habitService';
 import { getAllLogsRaw } from './logService';
 import { getAllMoodLogsRaw } from './moodService';
-import { getAllStacksRaw } from './stackService';
+import { getAllCategoriesRaw } from './categoryService';
 
 const BACKUP_VERSION = '1.0.0';
 const BACKUP_DIR = new Directory(Paths.document, 'backups');
@@ -20,10 +20,10 @@ const BACKUP_DIR = new Directory(Paths.document, 'backups');
 async function collectAllData(): Promise<BackupData> {
   const db = await getDb();
 
-  const [habits, habitLogs, stacks, moodLogs] = await Promise.all([
+  const [habits, habitLogs, categories, moodLogs] = await Promise.all([
     getAllHabitsRaw(),
     getAllLogsRaw(),
-    getAllStacksRaw(),
+    getAllCategoriesRaw(),
     getAllMoodLogsRaw(),
   ]);
 
@@ -44,7 +44,7 @@ async function collectAllData(): Promise<BackupData> {
     exportedAt: new Date().toISOString(),
     habits,
     habitLogs,
-    stacks,
+    categories,
     moodLogs,
     failureReasons,
     achievements,
@@ -127,6 +127,16 @@ export async function exportToCSV(): Promise<string> {
   return csvFile.uri;
 }
 
+export async function shareExportCSV(): Promise<void> {
+  const fileUri = await exportToCSV();
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(fileUri, {
+      mimeType: 'text/csv',
+      dialogTitle: 'Share Habit Logs CSV',
+    });
+  }
+}
+
 // ── Import ──────────────────────────────────────────────────────────────────
 
 export async function pickAndImportBackup(passphrase?: string): Promise<BackupMeta> {
@@ -167,15 +177,15 @@ async function restoreFromBackup(data: BackupData): Promise<void> {
     await db.execAsync('DELETE FROM failure_reasons');
     await db.execAsync('DELETE FROM habit_logs');
     await db.execAsync('DELETE FROM habits');
-    await db.execAsync('DELETE FROM stacks');
+    await db.execAsync('DELETE FROM categories');
     await db.execAsync('DELETE FROM mood_logs');
     await db.execAsync('DELETE FROM achievements');
 
-    // Restore stacks
-    for (const s of data.stacks) {
+    // Restore categories
+    for (const c of data.categories) {
       await db.runAsync(
-        'INSERT OR IGNORE INTO stacks (id, name, icon, color, sortOrder, createdAt) VALUES (?,?,?,?,?,?)',
-        [s.id, s.name, s.icon, s.color, s.sortOrder, s.createdAt],
+        'INSERT OR IGNORE INTO categories (id, name, icon, color, sortOrder, createdAt) VALUES (?,?,?,?,?,?)',
+        [c.id, c.name, c.icon, c.color, c.sortOrder, c.createdAt],
       );
     }
 
@@ -184,10 +194,10 @@ async function restoreFromBackup(data: BackupData): Promise<void> {
       await db.runAsync(
         `INSERT OR IGNORE INTO habits
          (id, name, description, type, targetValue, unit, frequencyRules,
-          color, icon, stackId, compositeSteps, createdAt, archivedAt, sortOrder)
+          color, icon, categoryId, compositeSteps, createdAt, archivedAt, sortOrder)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [h.id, h.name, h.description, h.type, h.targetValue, h.unit,
-        JSON.stringify(h.frequencyRules), h.color, h.icon, h.stackId,
+        JSON.stringify(h.frequencyRules), h.color, h.icon, h.categoryId,
         JSON.stringify(h.compositeSteps), h.createdAt, h.archivedAt, h.sortOrder],
       );
     }

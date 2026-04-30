@@ -33,7 +33,7 @@ const BottomSheetComponent = (
   const backdropOpacity = useSharedValue(0);
 
   const closeSheet = useCallback(() => {
-    translateY.value = withSpring(700, { damping: 20, stiffness: 180 });
+    translateY.value = withTiming(700, { duration: 250 });
     backdropOpacity.value = withTiming(0, { duration: 200 }, (done) => {
       if (done) runOnJS(setVisible)(false);
     });
@@ -42,7 +42,7 @@ const BottomSheetComponent = (
 
   const openSheet = useCallback(() => {
     setVisible(true);
-    translateY.value = withSpring(0, { damping: 20, stiffness: 180 });
+    translateY.value = withTiming(0, { duration: 250 });
     backdropOpacity.value = withTiming(1, { duration: 250 });
   }, []);
 
@@ -56,7 +56,7 @@ const BottomSheetComponent = (
       if (e.translationY > DRAG_THRESHOLD || e.velocityY > VELOCITY_THRESHOLD) {
         runOnJS(closeSheet)();
       } else {
-        translateY.value = withSpring(0, { damping: 20, stiffness: 180 });
+        translateY.value = withTiming(0, { duration: 200 });
       }
     });
 

@@ -51,16 +51,20 @@ function AnimatedBar({
   );
 }
 
-export function WeekdayBarChart({ data, width = 320, height = 140, color, title }: BarChartProps) {
+export function WeekdayBarChart({ data, height = 140, color, title }: BarChartProps) {
+  const [chartWidth, setChartWidth] = React.useState<number | null>(null);
+
   const padL = 8, padR = 8, padT = 12, padB = 28;
-  const chartW = width - padL - padR;
+  const chartW = chartWidth ? chartWidth - padL - padR : 0;
   const chartH = height - padT - padB;
-  const barW = chartW / data.length - 6;
+  const barW = chartW > 0 ? chartW / data.length - 6 : 0;
 
   return (
     <View style={[Cards.base, { marginBottom: Spacing[4] }]}>
       {title && <Text style={[T.label, { marginBottom: Spacing[3] }]}>{title}</Text>}
-      <Svg width={width} height={height}>
+      <View style={{ width: '100%' }} onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
+        {chartWidth !== null && chartWidth > 0 && (
+          <Svg width={chartWidth} height={height}>
         {/* Baseline */}
         <Line
           x1={padL} y1={padT + chartH}
@@ -104,7 +108,9 @@ export function WeekdayBarChart({ data, width = 320, height = 140, color, title 
             </React.Fragment>
           );
         })}
-      </Svg>
+          </Svg>
+        )}
+      </View>
     </View>
   );
 }
@@ -123,18 +129,20 @@ interface LineChartProps {
   title?: string;
 }
 
-export function LineChart({ data, width = 320, height = 120, color, min = 0, max = 10, title }: LineChartProps) {
+export function LineChart({ data, height = 120, color, min = 0, max = 10, title }: LineChartProps) {
+  const [chartWidth, setChartWidth] = React.useState<number | null>(null);
+
   if (data.length < 2) return null;
 
   const padL = 16, padR = 8, padT = 12, padB = 20;
-  const chartW = width - padL - padR;
+  const chartW = chartWidth ? chartWidth - padL - padR : 0;
   const chartH = height - padT - padB;
   const range = max - min;
 
-  const points = data.map((d, i) => ({
+  const points = chartW > 0 ? data.map((d, i) => ({
     x: padL + (i / (data.length - 1)) * chartW,
     y: padT + chartH - ((d.value - min) / range) * chartH,
-  }));
+  })) : [];
 
   // Build SVG path
   const pathD = points
@@ -142,14 +150,16 @@ export function LineChart({ data, width = 320, height = 120, color, min = 0, max
     .join(' ');
 
   // Filled area path
-  const areaD = `${pathD} L ${points[points.length - 1].x} ${padT + chartH} L ${points[0].x} ${padT + chartH} Z`;
+  const areaD = points.length > 0 ? `${pathD} L ${points[points.length - 1].x} ${padT + chartH} L ${points[0].x} ${padT + chartH} Z` : '';
 
   const lineColor = color ?? Colors.accent;
 
   return (
     <View style={[Cards.base, { marginBottom: Spacing[4] }]}>
       {title && <Text style={[T.label, { marginBottom: Spacing[3] }]}>{title}</Text>}
-      <Svg width={width} height={height}>
+      <View style={{ width: '100%' }} onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
+        {chartWidth !== null && chartWidth > 0 && (
+          <Svg width={chartWidth} height={height}>
         {/* Area fill */}
         <Path d={areaD} fill={lineColor} fillOpacity={0.08} />
         {/* Line */}
@@ -167,9 +177,11 @@ export function LineChart({ data, width = 320, height = 120, color, min = 0, max
             <SvgText x={points[points.length - 1].x} y={padT + chartH + 14} textAnchor="middle" fontSize={9} fill={Colors.textMuted}>
               {data[data.length - 1].label ?? ''}
             </SvgText>
-          </>
+            </>
+          )}
+          </Svg>
         )}
-      </Svg>
+      </View>
     </View>
   );
 }

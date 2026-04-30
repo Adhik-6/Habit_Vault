@@ -2,22 +2,22 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useRef } from 'react';
 import {
-  Alert,
-  ScrollView,
+  Alert, KeyboardAvoidingView, Platform, ScrollView,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useHabitsForSelectedDate, useStacksWithHabits, useUnstackedHabits } from '@/hooks/use-habits-for-date';
+import { useCategoriesWithHabits, useHabitsForSelectedDate, useUncategorizedHabits } from '@/hooks/use-habits-for-date';
 import { archiveHabit, deleteHabit } from '@services/habitService';
-import type { Habit, HabitWithLog, StackWithHabits } from '@src/types';
+import type { CategoryWithHabits, HabitWithLog } from '@src/types';
 import { useHabitStore } from '@store/useHabitStore';
 import { useMoodStore } from '@store/useMoodStore';
 
 import { BottomSheet, type BottomSheetRef } from '@src/components/common/BottomSheet';
+import { MonthCalendar } from '@src/components/common/MonthCalendar';
 import { ProgressRing } from '@src/components/common/ProgressRing';
 import { HabitCard } from '@src/components/habits/HabitCard';
 import { HabitForm, type HabitFormRef } from '@src/components/habits/HabitForm';
@@ -27,79 +27,30 @@ import { Colors, moodColor, Radius, Spacing } from '@design/tokens';
 import { scoreToEmoji as moodEmoji } from '@services/moodService';
 import {
   formatDisplayDate,
-  getDayOfWeek,
-  getLastNDays,
-  getRelativeLabel,
-  getShortDayName,
-  todayString,
+  todayString
 } from '@src/utils/dateUtils';
 
-// ── Date Strip ────────────────────────────────────────────────────────────────
-function DateStrip() {
-  const selectedDate = useHabitStore((s) => s.selectedDate);
-  const setSelectedDate = useHabitStore((s) => s.setSelectedDate);
-  const last7 = getLastNDays(7);
-
-  return (
-    <ScrollView
-      horizontal showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: Spacing[2], paddingHorizontal: Spacing[5], paddingVertical: Spacing[2] }}
-    >
-      {last7.map((date) => {
-        const isSelected = date === selectedDate;
-        const isToday = date === todayString();
-        const dow = getDayOfWeek(date);
-        const dayNum = date.split('-')[2];
-
-        return (
-          <TouchableOpacity
-            key={date}
-            onPress={() => { Haptics.selectionAsync(); setSelectedDate(date); }}
-            style={{
-              width: 44, alignItems: 'center', paddingVertical: Spacing[2],
-              borderRadius: Radius.lg,
-              backgroundColor: isSelected ? Colors.accent : 'transparent',
-              borderWidth: isSelected ? 0 : 1,
-              borderColor: isToday && !isSelected ? Colors.accentDim : Colors.border,
-            }}
-          >
-            <Text style={[T.xs, { color: isSelected ? '#fff' : Colors.textMuted }]}>
-              {getShortDayName(dow).charAt(0)}
-            </Text>
-            <Text style={[T.smMedium, {
-              color: isSelected ? '#fff' : isToday ? Colors.accentGlow : Colors.text,
-              marginTop: 2,
-            }]}>
-              {parseInt(dayNum, 10)}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  );
-}
-
-// ── Stack Section ─────────────────────────────────────────────────────────────
-function StackSection({ stack, onLongPressHabit }: {
-  stack: StackWithHabits;
+// ── Category Section ─────────────────────────────────────────────────────────────
+function CategorySection({ category, onLongPressHabit }: {
+  category: CategoryWithHabits;
   onLongPressHabit: (h: HabitWithLog) => void;
 }) {
-  const pct = stack.totalCount > 0 ? stack.completedCount / stack.totalCount : 0;
+  const pct = category.totalCount > 0 ? category.completedCount / category.totalCount : 0;
 
   return (
     <View style={{ marginBottom: Spacing[5] }}>
-      {/* Stack header */}
+      {/* Category header */}
       <View style={[Layout.spaceBetween, { marginBottom: Spacing[3] }]}>
         <View style={Layout.row}>
           <View style={{
             width: 10, height: 10, borderRadius: 5,
-            backgroundColor: stack.color, marginRight: Spacing[2],
+            backgroundColor: category.color, marginRight: Spacing[2],
           }} />
-          <Text style={T.h3}>{stack.name}</Text>
+          <Text style={T.h3}>{category.name}</Text>
         </View>
         <View style={Layout.row}>
           <Text style={[T.caption, { marginRight: Spacing[2] }]}>
-            {stack.completedCount}/{stack.totalCount}
+            {category.completedCount}/{category.totalCount}
           </Text>
           <Text style={[T.xs, {
             color: pct === 1 ? Colors.success : Colors.textMuted,
@@ -110,15 +61,15 @@ function StackSection({ stack, onLongPressHabit }: {
       </View>
 
       {/* Habits */}
-      {stack.habits.map((habit) => (
+      {category.habits.map((habit) => (
         <HabitCard key={habit.id} habit={habit} onLongPress={onLongPressHabit} />
       ))}
 
-      {/* Stack complete banner */}
-      {pct === 1 && stack.totalCount > 0 && (
+      {/* Category complete banner */}
+      {pct === 1 && category.totalCount > 0 && (
         <Animated.View entering={ZoomIn.duration(300)} style={[Cards.accentBorder, { alignItems: 'center', paddingVertical: Spacing[3], flexDirection: 'row', justifyContent: 'center', gap: Spacing[2] }]}>
           <Text style={{ fontSize: 20 }}>🎉</Text>
-          <Text style={[T.bodyMedium, { color: Colors.accentGlow }]}>{stack.name} complete!</Text>
+          <Text style={[T.bodyMedium, { color: Colors.accentGlow }]}>{category.name} complete!</Text>
         </Animated.View>
       )}
     </View>
@@ -175,25 +126,39 @@ function MoodLogger({ sheetRef }: { sheetRef: React.RefObject<BottomSheetRef> })
 }
 
 // ── Context Menu (long press) ─────────────────────────────────────────────────
-function HabitContextMenu({ habit, sheetRef, onClose }: {
+function HabitContextMenu({
+  habit,
+  sheetRef,
+  onClose,
+  formRef,
+}: {
   habit: HabitWithLog | null;
   sheetRef: React.RefObject<BottomSheetRef>;
   onClose: () => void;
+  formRef: React.RefObject<HabitFormRef>;
 }) {
   const loadHabits = useHabitStore((s) => s.loadHabits);
-  const formRef = useRef<HabitFormRef>(null);
 
   if (!habit) return null;
 
   const handleEdit = () => {
     sheetRef.current?.close();
-    setTimeout(() => formRef.current?.openEdit(habit as unknown as Habit), 300);
+    setTimeout(() => {
+      if (habit) formRef.current?.openEdit(habit);
+    }, 300);
   };
 
-  const handleArchive = async () => {
-    sheetRef.current?.close();
-    await archiveHabit(habit.id);
-    await loadHabits();
+  const handleArchive = () => {
+    Alert.alert('Archive Habit', `Archive "${habit?.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Archive', style: 'default', onPress: async () => {
+          sheetRef.current?.close();
+          if (habit) await archiveHabit(habit.id);
+          await loadHabits();
+        },
+      },
+    ]);
   };
 
   const handleDelete = () => {
@@ -232,7 +197,6 @@ function HabitContextMenu({ habit, sheetRef, onClose }: {
           </TouchableOpacity>
         ))}
       </View>
-      <HabitForm ref={formRef} onSaved={onClose} />
     </>
   );
 }
@@ -247,8 +211,8 @@ export default function TodayScreen() {
   const isLoading = useHabitStore((s) => s.isLoading);
   const selectedDate = useHabitStore((s) => s.selectedDate);
   const habitsForDate = useHabitsForSelectedDate();
-  const stacksWithHabits = useStacksWithHabits();
-  const unstackedHabits = useUnstackedHabits();
+  const categoriesWithHabits = useCategoriesWithHabits();
+  const uncategorizedHabits = useUncategorizedHabits();
   const todayMood = useMoodStore((s) => s.todayMood);
 
   const completed = habitsForDate.filter((h) => h.isCompleted).length;
@@ -261,15 +225,15 @@ export default function TodayScreen() {
     contextSheetRef.current?.open();
   }, []);
 
-  const nonEmptyStacks = stacksWithHabits.filter((s) => s.habits.length > 0);
+  const nonEmptyCategories = categoriesWithHabits.filter((s) => s.habits.length > 0);
 
   return (
     <SafeAreaView style={Layout.screen} edges={['top']}>
       {/* ── Fixed header ── */}
       <Animated.View entering={FadeIn.duration(350)}>
-        <View style={[Layout.spaceBetween, { paddingHorizontal: Spacing[5], paddingTop: Spacing[4], paddingBottom: Spacing[2] }]}>
+        <View style={[Layout.spaceBetween, { paddingHorizontal: Spacing[5], paddingTop: Spacing[4], paddingBottom: Spacing[4] }]}>
           <View>
-            <Text style={T.label}>{getRelativeLabel(selectedDate)}</Text>
+            {/* <Text style={T.label}>{getRelativeLabel(selectedDate)}</Text> */}
             <Text style={T.h1}>
               {selectedDate === todayString() ? 'Today' : formatDisplayDate(selectedDate)}
             </Text>
@@ -278,7 +242,7 @@ export default function TodayScreen() {
             {/* Mood button */}
             <TouchableOpacity
               onPress={() => moodSheetRef.current?.open()}
-              style={[Buttons.icon, { marginRight: Spacing[2], backgroundColor: todayMood ? Colors.accentMuted : Colors.surfaceElevated, borderColor: todayMood ? Colors.accentDim : Colors.border }]}
+              style={[Buttons.icon, { backgroundColor: todayMood ? Colors.accentMuted : Colors.surfaceElevated, borderColor: todayMood ? Colors.accentDim : Colors.border }]}
             >
               <Text style={{ fontSize: 18 }}>
                 {todayMood ? moodEmoji(todayMood.score) : '😐'}
@@ -287,93 +251,96 @@ export default function TodayScreen() {
             {/* Add habit */}
             <TouchableOpacity
               onPress={() => formRef.current?.openCreate()}
-              style={[Buttons.icon, { backgroundColor: Colors.accentMuted, borderColor: Colors.accentDim }]}
+              style={[Buttons.icon, { marginLeft: Spacing[2], backgroundColor: Colors.accentMuted, borderColor: Colors.accentDim }]}
             >
               <Ionicons name="add" size={22} color={Colors.accentGlow} />
             </TouchableOpacity>
           </View>
         </View>
+      </Animated.View>
 
-        {/* Date strip */}
-        <DateStrip />
-
-        {/* Progress summary */}
-        {total > 0 && (
-          <View style={[Cards.base, { margin: Spacing[5], marginTop: Spacing[2], flexDirection: 'row', alignItems: 'center', gap: Spacing[4] }]}>
-            <ProgressRing progress={pct} size={60} strokeWidth={5} color={pct === 1 ? Colors.success : Colors.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={T.h3}>
-                {completed}/{total} done
-                {pct === 1 ? ' 🎉' : ''}
-              </Text>
-              <Text style={T.caption}>{Math.round(pct * 100)}% complete</Text>
+      {/* ── Scrollable habit list & calendar ── */}
+      <KeyboardAvoidingView style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={5}
+      >
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: Spacing[24] }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        // keyboardDismissMode="on-drag"
+        >
+          <Animated.View entering={FadeIn.duration(350)}>
+            {/* Monthly Calendar */}
+            <View style={{ paddingHorizontal: Spacing[5] }}>
+              <MonthCalendar />
             </View>
-            {pct === 1 && (
-              <Animated.View entering={ZoomIn.duration(400)}>
-                <Text style={{ fontSize: 28 }}>⚡</Text>
+
+            {/* Progress summary */}
+            {total > 0 && (
+              <View style={[Cards.base, { margin: Spacing[5], marginTop: Spacing[2], flexDirection: 'row', alignItems: 'center', gap: Spacing[4] }]}>
+                <ProgressRing progress={pct} size={60} strokeWidth={5} color={pct === 1 ? Colors.success : Colors.accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={T.h3}>
+                    {completed}/{total} done
+                    {pct === 1 ? ' 🎉' : ''}
+                  </Text>
+                  <Text style={T.caption}>{Math.round(pct * 100)}% complete</Text>
+                </View>
+                {pct === 1 && (
+                  <Animated.View entering={ZoomIn.duration(400)}>
+                    <Text style={{ fontSize: 28 }}>⚡</Text>
+                  </Animated.View>
+                )}
+              </View>
+            )}
+          </Animated.View>
+
+          <View style={{ paddingHorizontal: Spacing[5], paddingTop: Spacing[2] }}>
+            {total === 0 && !isLoading ? (
+              <Animated.View
+                entering={FadeInDown.delay(200).duration(400)}
+                style={[Cards.base, Layout.center, { paddingVertical: Spacing[12], gap: Spacing[3] }]}
+              >
+                <Text style={{ fontSize: 42 }}>🌱</Text>
+                <Text style={T.h3}>No habits yet</Text>
+                <Text style={[T.caption, { textAlign: 'center' }]}>
+                  Tap the + button to create your first habit and start building momentum.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => formRef.current?.openCreate()}
+                  style={[Buttons.primary, { marginTop: Spacing[2] }]}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="#fff" />
+                  <Text style={[T.bodyMedium, { color: '#fff' }]}>Create First Habit</Text>
+                </TouchableOpacity>
               </Animated.View>
+            ) : (
+              <>
+                {/* Categorized habits */}
+                {nonEmptyCategories.map((category, i) => (
+                  <Animated.View key={category.id} entering={FadeInDown.delay(i * 80).duration(350)}>
+                    <CategorySection category={category} onLongPressHabit={handleLongPress} />
+                  </Animated.View>
+                ))}
+
+                {/* Uncategorized habits */}
+                {uncategorizedHabits.length > 0 && (
+                  <Animated.View entering={FadeInDown.delay(nonEmptyCategories.length * 80).duration(350)}>
+                    {nonEmptyCategories.length > 0 && (
+                      <Text style={[T.label, { marginBottom: Spacing[3] }]}>Other Habits</Text>
+                    )}
+                    {uncategorizedHabits.map((habit) => (
+                      <HabitCard key={habit.id} habit={habit} onLongPress={handleLongPress} />
+                    ))}
+                  </Animated.View>
+                )}
+              </>
             )}
           </View>
-        )}
-      </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* ── Scrollable habit list ── */}
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: Spacing[5], paddingBottom: Spacing[24], paddingTop: Spacing[5] }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {total === 0 && !isLoading ? (
-          <Animated.View
-            entering={FadeInDown.delay(200).duration(400)}
-            style={[Cards.base, Layout.center, { paddingVertical: Spacing[12], gap: Spacing[3] }]}
-          >
-            <Text style={{ fontSize: 42 }}>🌱</Text>
-            <Text style={T.h3}>No habits yet</Text>
-            <Text style={[T.caption, { textAlign: 'center' }]}>
-              Tap the + button to create your first habit and start building momentum.
-            </Text>
-            <TouchableOpacity
-              onPress={() => formRef.current?.openCreate()}
-              style={[Buttons.primary, { marginTop: Spacing[2] }]}
-            >
-              <Ionicons name="add-circle-outline" size={18} color="#fff" />
-              <Text style={[T.bodyMedium, { color: '#fff' }]}>Create First Habit</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        ) : (
-          <>
-            {/* Stacked habits */}
-            {nonEmptyStacks.map((stack, i) => (
-              <Animated.View key={stack.id} entering={FadeInDown.delay(i * 80).duration(350)}>
-                <StackSection stack={stack} onLongPressHabit={handleLongPress} />
-              </Animated.View>
-            ))}
-
-            {/* Unstacked habits */}
-            {unstackedHabits.length > 0 && (
-              <Animated.View entering={FadeInDown.delay(nonEmptyStacks.length * 80).duration(350)}>
-                {nonEmptyStacks.length > 0 && (
-                  <Text style={[T.label, { marginBottom: Spacing[3] }]}>Other Habits</Text>
-                )}
-                {unstackedHabits.map((habit) => (
-                  <HabitCard key={habit.id} habit={habit} onLongPress={handleLongPress} />
-                ))}
-              </Animated.View>
-            )}
-          </>
-        )}
-      </ScrollView>
-
-      {/* ── Floating action button ── */}
-      <Animated.View entering={FadeIn.delay(400).duration(300)} style={Buttons.fab}>
-        <TouchableOpacity
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); formRef.current?.openCreate(); }}
-          style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
-      </Animated.View>
 
       {/* ── Sheets ── */}
       <HabitForm ref={formRef} />
@@ -385,6 +352,7 @@ export default function TodayScreen() {
           habit={contextHabit}
           sheetRef={contextSheetRef as React.RefObject<BottomSheetRef>}
           onClose={() => contextSheetRef.current?.close()}
+          formRef={formRef as React.RefObject<HabitFormRef>}
         />
       </BottomSheet>
     </SafeAreaView>

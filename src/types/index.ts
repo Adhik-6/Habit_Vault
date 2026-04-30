@@ -31,7 +31,7 @@ export interface Habit {
   frequencyRules: FrequencyRule;
   color: string; // hex
   icon: string; // icon name
-  stackId: string | null;
+  categoryId: string | null;
   compositeSteps: CompositeStep[];
   createdAt: string; // ISO 8601
   archivedAt: string | null;
@@ -58,10 +58,10 @@ export interface HabitLog {
 }
 
 // ─────────────────────────────────────────────
-// STACK TYPES
+// CATEGORY TYPES
 // ─────────────────────────────────────────────
 
-export interface Stack {
+export interface Category {
   id: string;
   name: string;
   icon: string;
@@ -176,7 +176,7 @@ export interface HabitWithLog extends Habit {
   strengthScore: number;
 }
 
-export interface StackWithHabits extends Stack {
+export interface CategoryWithHabits extends Category {
   habits: HabitWithLog[];
   completedCount: number;
   totalCount: number;
@@ -192,7 +192,7 @@ export interface BackupData {
   exportedAt: string;
   habits: Habit[];
   habitLogs: HabitLog[];
-  stacks: Stack[];
+  categories: Category[];
   moodLogs: MoodLog[];
   failureReasons: FailureReason[];
   achievements: Achievement[];

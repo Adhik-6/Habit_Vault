@@ -22,10 +22,7 @@ import { useHabitStore } from '@store/useHabitStore';
 import { LineChart, WeekdayBarChart } from '@src/components/charts/Charts';
 import { ProgressRing } from '@src/components/common/ProgressRing';
 import { FailureAnalysisWidget } from '@src/components/insights/FailureAnalysisWidget';
-import {
-  HabitPerformanceSheet,
-  type HabitPerformanceSheetRef,
-} from '@src/components/insights/HabitPerformanceSheet';
+import { useRouter } from 'expo-router';
 import { MoodCorrelationWidget } from '@src/components/insights/MoodCorrelationWidget';
 
 import { Cards, Layout, Text as T } from '@design/components';
@@ -155,10 +152,6 @@ function OverviewTab() {
         )}
       </Animated.View>
 
-      {/* Weekday performance */}
-      <Animated.View entering={FadeInDown.delay(320).duration(350)}>
-        <WeekdayBarChart data={weekdayStats} title="Weekday Performance" width={340} />
-      </Animated.View>
     </View>
   );
 }
@@ -293,7 +286,7 @@ function MoodTab() {
             title="Mood Trend — Last 14 Days"
             min={1} max={10}
             color={Colors.info}
-            width={340} height={140}
+            height={140}
           />
         </Animated.View>
       )}
@@ -365,7 +358,7 @@ function PatternsTab() {
 
       {/* Weekday bars */}
       <Animated.View entering={FadeInDown.delay(160).duration(350)}>
-        <WeekdayBarChart data={weekdayStats} title="Completion by Weekday" width={340} />
+        <WeekdayBarChart data={weekdayStats} title="Completion by Weekday" />
       </Animated.View>
 
       {/* Failure analysis */}
@@ -404,7 +397,7 @@ function PatternsTab() {
 
 export default function InsightsScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const perfSheetRef = useRef<HabitPerformanceSheetRef>(null);
+  const router = useRouter();
 
   return (
     <SafeAreaView style={Layout.screen} edges={['top']}>
@@ -459,14 +452,12 @@ export default function InsightsScreen() {
       >
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'habits' && (
-          <HabitsTab onHabitPress={(h) => perfSheetRef.current?.open(h)} />
+          <HabitsTab onHabitPress={(h) => router.push(`/habit/${h.id}` as any)} />
         )}
         {activeTab === 'mood' && <MoodTab />}
         {activeTab === 'patterns' && <PatternsTab />}
       </ScrollView>
 
-      {/* Performance detail sheet */}
-      <HabitPerformanceSheet ref={perfSheetRef} />
     </SafeAreaView>
   );
 }

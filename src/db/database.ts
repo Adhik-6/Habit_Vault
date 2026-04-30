@@ -7,7 +7,7 @@ import {
   CREATE_INDEXES,
   CREATE_MIGRATIONS_TABLE,
   CREATE_MOOD_LOGS_TABLE,
-  CREATE_STACKS_TABLE,
+  CREATE_CATEGORIES_TABLE,
 } from './schema';
 
 const DB_NAME = 'habitvault.db';
@@ -67,7 +67,7 @@ const MIGRATIONS: Migration[] = [
     version: 1,
     up: async (db) => {
       // Create tables in dependency order
-      await db.execAsync(CREATE_STACKS_TABLE);
+      await db.execAsync(CREATE_CATEGORIES_TABLE);
       await db.execAsync(CREATE_HABITS_TABLE);
       await db.execAsync(CREATE_HABIT_LOGS_TABLE);
       await db.execAsync(CREATE_MOOD_LOGS_TABLE);
@@ -77,6 +77,14 @@ const MIGRATIONS: Migration[] = [
       for (const sql of CREATE_INDEXES) {
         await db.execAsync(sql);
       }
+    },
+  },
+  {
+    version: 2,
+    up: async (db) => {
+      // Rename stacks to categories
+      await db.execAsync('ALTER TABLE stacks RENAME TO categories;');
+      await db.execAsync('ALTER TABLE habits RENAME COLUMN stackId TO categoryId;');
     },
   },
 ];

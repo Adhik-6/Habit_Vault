@@ -4,9 +4,11 @@
 import { Cards, Divider, Layout, Text as T } from '@design/components';
 import { Colors, Radius, Spacing } from '@design/tokens';
 import { Ionicons } from '@expo/vector-icons';
-import { exportToCSV, pickAndImportBackup, shareBackupJSON } from '@services/exportService';
+import { shareExportCSV, pickAndImportBackup, shareBackupJSON } from '@services/exportService';
 import { useHabitStore } from '@store/useHabitStore';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { ManageCategoriesSheet } from '@src/components/habits/ManageCategoriesSheet';
+import type { BottomSheetRef } from '@src/components/common/BottomSheet';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -67,6 +69,7 @@ export default function SettingsScreen() {
   const loadHabits = useHabitStore((s) => s.loadHabits);
   const habits = useHabitStore((s) => s.habits);
   const logs = useHabitStore((s) => s.todayLogsMap);
+  const manageCategoriesRef = useRef<BottomSheetRef>(null);
 
   async function handleExportJSON() {
     setExportingJSON(true);
@@ -82,8 +85,7 @@ export default function SettingsScreen() {
   async function handleExportCSV() {
     setExportingCSV(true);
     try {
-      await exportToCSV();
-      Alert.alert('Exported', 'CSV saved to your documents folder.');
+      await shareExportCSV();
     } catch (e: any) {
       Alert.alert('Export Failed', e.message);
     } finally {
@@ -143,7 +145,16 @@ export default function SettingsScreen() {
 
         {/* ── Data section ── */}
         <Animated.View entering={FadeInDown.delay(180).duration(350)}>
-          <Text style={[T.label, { marginBottom: Spacing[3] }]}>Data & Backup</Text>
+          <Text style={[T.label, { marginBottom: Spacing[3] }]}>Customization</Text>
+          <SettingRow
+            icon="layers-outline"
+            label="Manage Categories"
+            description="Create or edit habit categories"
+            onPress={() => manageCategoriesRef.current?.open()}
+            color={Colors.accent}
+          />
+          
+          <Text style={[T.label, { marginBottom: Spacing[3], marginTop: Spacing[4] }]}>Data & Backup</Text>
 
           <SettingRow
             icon="share-outline"
@@ -207,6 +218,7 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
       </ScrollView>
+      <ManageCategoriesSheet ref={manageCategoriesRef} />
     </SafeAreaView>
   );
 }

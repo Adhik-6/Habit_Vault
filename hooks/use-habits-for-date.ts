@@ -2,7 +2,7 @@
 
 import { filterHabitsForDate } from '@/src/services/habitService';
 import { useHabitStore } from '@/src/store/useHabitStore';
-import type { HabitWithLog, StackWithHabits } from '@/src/types';
+import type { HabitWithLog, CategoryWithHabits } from '@/src/types';
 import { useMemo } from 'react';
 
 export function useHabitsForSelectedDate(): HabitWithLog[] {
@@ -29,29 +29,29 @@ export function useHabitsForSelectedDate(): HabitWithLog[] {
     }, [habits, selectedDate, todayLogsMap, streakCache, scoreCache]);
 }
 
-export function useStacksWithHabits(): StackWithHabits[] {
-    const stacks = useHabitStore((s) => s.stacks);
+export function useCategoriesWithHabits(): CategoryWithHabits[] {
+    const categories = useHabitStore((s) => s.categories);
     const habitsForDate = useHabitsForSelectedDate(); // Uses the hook above!
 
     return useMemo(() => {
-        return stacks.map((s): StackWithHabits => {
-            const stackHabits = habitsForDate.filter((h) => h.stackId === s.id);
-            const completed = stackHabits.filter((h) => h.isCompleted).length;
+        return categories.map((c): CategoryWithHabits => {
+            const categoryHabits = habitsForDate.filter((h) => h.categoryId === c.id);
+            const completed = categoryHabits.filter((h) => h.isCompleted).length;
             return {
-                ...s,
-                habits: stackHabits,
+                ...c,
+                habits: categoryHabits,
                 completedCount: completed,
-                totalCount: stackHabits.length,
-                completionRate: stackHabits.length > 0 ? completed / stackHabits.length : 0,
+                totalCount: categoryHabits.length,
+                completionRate: categoryHabits.length > 0 ? completed / categoryHabits.length : 0,
             };
         });
-    }, [stacks, habitsForDate]);
+    }, [categories, habitsForDate]);
 }
 
-export function useUnstackedHabits(): HabitWithLog[] {
+export function useUncategorizedHabits(): HabitWithLog[] {
     const habitsForDate = useHabitsForSelectedDate();
 
     return useMemo(() => {
-        return habitsForDate.filter((h) => h.stackId === null);
+        return habitsForDate.filter((h) => h.categoryId === null);
     }, [habitsForDate]);
 }

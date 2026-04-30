@@ -42,7 +42,7 @@ interface FormState {
   frequencyType: 'daily' | 'weekly';
   selectedDays: number[];
   compositeSteps: CompositeStep[];
-  stackId: string | null;
+  categoryId: string | null;
 }
 
 function defaultForm(): FormState {
@@ -56,7 +56,7 @@ function defaultForm(): FormState {
     frequencyType: 'daily',
     selectedDays: [1, 2, 3, 4, 5],
     compositeSteps: [],
-    stackId: null,
+    categoryId: null,
   };
 }
 
@@ -71,7 +71,7 @@ function habitToForm(habit: Habit): FormState {
     frequencyType: habit.frequencyRules.type === 'daily' ? 'daily' : 'weekly',
     selectedDays: habit.frequencyRules.daysOfWeek ?? [1, 2, 3, 4, 5],
     compositeSteps: habit.compositeSteps,
-    stackId: habit.stackId,
+    categoryId: habit.categoryId,
   };
 }
 
@@ -95,7 +95,7 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
     const [saving, setSaving] = useState(false);
 
     const loadHabits = useHabitStore((s) => s.loadHabits);
-    const stacks = useHabitStore((s) => s.stacks);
+    const categories = useHabitStore((s) => s.categories);
 
     React.useImperativeHandle(ref, () => ({
       openCreate: () => {
@@ -156,7 +156,7 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
           color: form.color,
           frequencyRules,
           compositeSteps: form.compositeSteps,
-          stackId: form.stackId,
+          categoryId: form.categoryId,
         };
 
         if (editingId) {
@@ -362,30 +362,30 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
             </View>
           </View>
 
-          {/* Stack assignment */}
-          {stacks.length > 0 && (
+          {/* Category assignment */}
+          {categories.length > 0 && (
             <View>
-              <Text style={[T.label, { marginBottom: Spacing[2] }]}>Stack (optional)</Text>
+              <Text style={[T.label, { marginBottom: Spacing[2] }]}>Category (optional)</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing[2] }}>
                 <TouchableOpacity
-                  onPress={() => update({ stackId: null })}
+                  onPress={() => update({ categoryId: null })}
                   style={[Cards.compact, {
-                    borderColor: form.stackId === null ? Colors.accent : Colors.border,
-                    backgroundColor: form.stackId === null ? Colors.accentMuted : Colors.surface,
+                    borderColor: form.categoryId === null ? Colors.accent : Colors.border,
+                    backgroundColor: form.categoryId === null ? Colors.accentMuted : Colors.surface,
                   }]}
                 >
-                  <Text style={[T.sm, { color: form.stackId === null ? Colors.accentGlow : Colors.textMuted }]}>None</Text>
+                  <Text style={[T.sm, { color: form.categoryId === null ? Colors.accentGlow : Colors.textMuted }]}>None</Text>
                 </TouchableOpacity>
-                {stacks.map((s) => (
+                {categories.map((c) => (
                   <TouchableOpacity
-                    key={s.id}
-                    onPress={() => update({ stackId: s.id })}
+                    key={c.id}
+                    onPress={() => update({ categoryId: c.id })}
                     style={[Cards.compact, {
-                      borderColor: form.stackId === s.id ? Colors.accent : Colors.border,
-                      backgroundColor: form.stackId === s.id ? Colors.accentMuted : Colors.surface,
+                      borderColor: form.categoryId === c.id ? Colors.accent : Colors.border,
+                      backgroundColor: form.categoryId === c.id ? Colors.accentMuted : Colors.surface,
                     }]}
                   >
-                    <Text style={[T.sm, { color: form.stackId === s.id ? Colors.accentGlow : Colors.textSecondary }]}>{s.name}</Text>
+                    <Text style={[T.sm, { color: form.categoryId === c.id ? Colors.accentGlow : Colors.textSecondary }]}>{c.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>

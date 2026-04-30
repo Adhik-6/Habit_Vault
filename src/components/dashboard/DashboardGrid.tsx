@@ -9,7 +9,7 @@ import {
   LayoutAnimation, UIManager, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, Radius } from '@design/tokens';
@@ -28,7 +28,8 @@ export type WidgetId =
   | 'strength'
   | 'weekday'
   | 'mood_trend'
-  | 'insights';
+  | 'insights'
+  | 'category_analysis';
 
 export interface WidgetConfig {
   id: WidgetId;
@@ -42,6 +43,7 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
   { id: 'heatmap', title: 'Activity Heatmap', icon: 'calendar-outline', visible: true },
   { id: 'streak', title: 'Best Streak', icon: 'flame-outline', visible: true },
   { id: 'weekday', title: 'Weekday Performance', icon: 'bar-chart-outline', visible: true },
+  { id: 'category_analysis', title: 'Category Analysis', icon: 'pie-chart-outline', visible: true },
   { id: 'mood_trend', title: 'Mood Trend', icon: 'happy-outline', visible: true },
   { id: 'insights', title: 'Auto Insights', icon: 'bulb-outline', visible: true },
 ];
@@ -78,7 +80,7 @@ export function DashboardGrid({ renderWidget }: DashboardGridProps) {
   const moveUp = useCallback((index: number) => {
     if (index === 0) return;
     Haptics.selectionAsync();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    Haptics.selectionAsync();
     setWidgets((prev) => {
       const next = [...prev];
       [next[index - 1], next[index]] = [next[index], next[index - 1]];
@@ -91,7 +93,7 @@ export function DashboardGrid({ renderWidget }: DashboardGridProps) {
     setWidgets((prev) => {
       if (index === prev.length - 1) return prev;
       Haptics.selectionAsync();
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      Haptics.selectionAsync();
       const next = [...prev];
       [next[index], next[index + 1]] = [next[index + 1], next[index]];
       persist(next);
@@ -176,7 +178,7 @@ export function DashboardGrid({ renderWidget }: DashboardGridProps) {
 
       {/* Visible widgets */}
       {visibleWidgets.map((widget, i) => (
-        <Animated.View key={widget.id} entering={FadeInDown.delay(i * 60).duration(350)}>
+        <Animated.View key={widget.id} entering={FadeInDown.delay(i * 60).duration(350)} layout={LinearTransition.springify()}>
           {renderWidget(widget.id, i)}
         </Animated.View>
       ))}

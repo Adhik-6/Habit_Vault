@@ -11,8 +11,8 @@ export const CREATE_MIGRATIONS_TABLE = `
   );
 `;
 
-export const CREATE_STACKS_TABLE = `
-  CREATE TABLE IF NOT EXISTS stacks (
+export const CREATE_CATEGORIES_TABLE = `
+  CREATE TABLE IF NOT EXISTS categories (
     id        TEXT    PRIMARY KEY NOT NULL,
     name      TEXT    NOT NULL,
     icon      TEXT    NOT NULL DEFAULT 'layers',
@@ -33,12 +33,12 @@ export const CREATE_HABITS_TABLE = `
     frequencyRules TEXT    NOT NULL DEFAULT '{"type":"daily"}',
     color          TEXT    NOT NULL DEFAULT '#6366F1',
     icon           TEXT    NOT NULL DEFAULT 'star',
-    stackId        TEXT,
+    categoryId     TEXT,
     compositeSteps TEXT    NOT NULL DEFAULT '[]',
     createdAt      TEXT    NOT NULL,
     archivedAt     TEXT,
     sortOrder      INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (stackId) REFERENCES stacks(id) ON DELETE SET NULL
+    FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL
   );
 `;
 
@@ -98,7 +98,7 @@ export const CREATE_INDEXES: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_habit_logs_habitId      ON habit_logs(habitId);`,
   `CREATE INDEX IF NOT EXISTS idx_habit_logs_date         ON habit_logs(date);`,
   `CREATE INDEX IF NOT EXISTS idx_habit_logs_habitId_date ON habit_logs(habitId, date);`,
-  `CREATE INDEX IF NOT EXISTS idx_habits_stackId          ON habits(stackId);`,
+  `CREATE INDEX IF NOT EXISTS idx_habits_categoryId       ON habits(categoryId);`,
   `CREATE INDEX IF NOT EXISTS idx_habits_active           ON habits(archivedAt);`,
   `CREATE INDEX IF NOT EXISTS idx_failure_reasons_habit   ON failure_reasons(habitId);`,
   `CREATE INDEX IF NOT EXISTS idx_mood_logs_date          ON mood_logs(date);`,

@@ -20,7 +20,7 @@ interface HabitDetailProps {
   habit: HabitWithLog;
 }
 
-function HabitDetail({ habit }: HabitDetailProps) {
+export function HabitDetail({ habit }: HabitDetailProps) {
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const streakCache = useHabitStore((s) => s.streakCache);
   const todayLogsMap = useHabitStore((s) => s.todayLogsMap);

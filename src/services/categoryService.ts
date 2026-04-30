@@ -1,44 +1,44 @@
 import { getDb } from '../db/database';
 import type { SQLiteBindValue } from 'expo-sqlite';
-import type { Stack } from '../types';
+import type { Category } from '../types';
 import { generateId } from '../utils/idUtils';
 
 // ── Row mapper ──────────────────────────────────────────────────────────────
 
-type StackRow = Stack;
+type CategoryRow = Category;
 
-function rowToStack(row: StackRow): Stack {
+function rowToCategory(row: CategoryRow): Category {
   return { ...row };
 }
 
 // ── Read ────────────────────────────────────────────────────────────────────
 
-export async function getStacks(): Promise<Stack[]> {
+export async function getCategories(): Promise<Category[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<StackRow>(
-    'SELECT * FROM stacks ORDER BY sortOrder ASC, createdAt ASC',
+  const rows = await db.getAllAsync<CategoryRow>(
+    'SELECT * FROM categories ORDER BY sortOrder ASC, createdAt ASC',
   );
-  return rows.map(rowToStack);
+  return rows.map(rowToCategory);
 }
 
-export async function getStackById(id: string): Promise<Stack | null> {
+export async function getCategoryById(id: string): Promise<Category | null> {
   const db = await getDb();
-  const row = await db.getFirstAsync<StackRow>('SELECT * FROM stacks WHERE id = ?', [id]);
-  return row ? rowToStack(row) : null;
+  const row = await db.getFirstAsync<CategoryRow>('SELECT * FROM categories WHERE id = ?', [id]);
+  return row ? rowToCategory(row) : null;
 }
 
 // ── Write ───────────────────────────────────────────────────────────────────
 
-export interface CreateStackInput {
+export interface CreateCategoryInput {
   name: string;
   icon?: string;
   color?: string;
   sortOrder?: number;
 }
 
-export async function createStack(input: CreateStackInput): Promise<Stack> {
+export async function createCategory(input: CreateCategoryInput): Promise<Category> {
   const db = await getDb();
-  const stack: Stack = {
+  const category: Category = {
     id: generateId(),
     name: input.name,
     icon: input.icon ?? 'layers',
@@ -48,16 +48,16 @@ export async function createStack(input: CreateStackInput): Promise<Stack> {
   };
 
   await db.runAsync(
-    `INSERT INTO stacks (id, name, icon, color, sortOrder, createdAt)
+    `INSERT INTO categories (id, name, icon, color, sortOrder, createdAt)
      VALUES (?,?,?,?,?,?)`,
-    [stack.id, stack.name, stack.icon, stack.color, stack.sortOrder, stack.createdAt],
+    [category.id, category.name, category.icon, category.color, category.sortOrder, category.createdAt],
   );
-  return stack;
+  return category;
 }
 
-export async function updateStack(
+export async function updateCategory(
   id: string,
-  input: Partial<Omit<Stack, 'id' | 'createdAt'>>,
+  input: Partial<Omit<Category, 'id' | 'createdAt'>>,
 ): Promise<void> {
   const db = await getDb();
   const fields: string[] = [];
@@ -70,24 +70,24 @@ export async function updateStack(
 
   if (fields.length === 0) return;
   values.push(id);
-  await db.runAsync(`UPDATE stacks SET ${fields.join(', ')} WHERE id = ?`, values);
+  await db.runAsync(`UPDATE categories SET ${fields.join(', ')} WHERE id = ?`, values);
 }
 
-export async function deleteStack(id: string): Promise<void> {
+export async function deleteCategory(id: string): Promise<void> {
   const db = await getDb();
-  // Habits in this stack have stackId set to NULL via ON DELETE SET NULL
-  await db.runAsync('DELETE FROM stacks WHERE id = ?', [id]);
+  // Habits in this category have categoryId set to NULL via ON DELETE SET NULL
+  await db.runAsync('DELETE FROM categories WHERE id = ?', [id]);
 }
 
-export async function reorderStacks(orderedIds: string[]): Promise<void> {
+export async function reorderCategories(orderedIds: string[]): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
     for (let i = 0; i < orderedIds.length; i++) {
-      await db.runAsync('UPDATE stacks SET sortOrder = ? WHERE id = ?', [i, orderedIds[i]]);
+      await db.runAsync('UPDATE categories SET sortOrder = ? WHERE id = ?', [i, orderedIds[i]]);
     }
   });
 }
 
-export async function getAllStacksRaw(): Promise<Stack[]> {
-  return getStacks();
+export async function getAllCategoriesRaw(): Promise<Category[]> {
+  return getCategories();
 }

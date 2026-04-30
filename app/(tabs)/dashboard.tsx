@@ -8,17 +8,22 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useHabitsForSelectedDate } from '@/hooks/use-habits-for-date';
+import { useMoodTimeline } from '@/hooks/use-mood-for-date';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
 import { useHabitStore } from '@store/useHabitStore';
+import { filterHabitsForDate } from '@src/services/habitService';
+import { getLogsForDate } from '@src/services/logService';
+import { todayString } from '@src/utils/dateUtils';
 
 import { LineChart, WeekdayBarChart } from '@src/components/charts/Charts';
 import { DashboardGrid, type WidgetId } from '@src/components/dashboard/DashboardGrid';
 import { HeatmapWidget } from '@src/components/dashboard/widgets/HeatmapWidget';
 import { StreakWidget } from '@src/components/dashboard/widgets/StreakWidget';
 import { StrengthScoreWidget } from '@src/components/dashboard/widgets/StrengthScoreWidget';
+import { CategoryAnalysisWidget } from '@src/components/dashboard/widgets/CategoryAnalysisWidget';
 
 import { Cards, Layout, Text as T } from '@design/components';
-import { Colors, Spacing } from '@design/tokens';
+import { Colors, Spacing, Radius } from '@design/tokens';
 import { Ionicons } from '@expo/vector-icons';
 
 // ── Insights widget ────────────────────────────────────────────────────────────
@@ -84,12 +89,23 @@ function InsightsWidget() {
 export default function DashboardScreen() {
   const weekdayStats = useAnalyticsStore((s) => s.weekdayStats);
   const moodTimeline = useMoodTimeline(30);
-  const habitsForDate = useHabitsForSelectedDate();
   const globalScore = useAnalyticsStore((s) => s.globalScore);
   const habits = useHabitStore((s) => s.habits);
 
-  const completed = habitsForDate.filter((h) => h.isCompleted).length;
-  const total = habitsForDate.length;
+  const [todayCompleted, setTodayCompleted] = React.useState(0);
+  const [todayTotal, setTodayTotal] = React.useState(0);
+
+  React.useEffect(() => {
+    async function fetchTodayStats() {
+      const today = todayString();
+      const scheduled = filterHabitsForDate(habits, today);
+      const logs = await getLogsForDate(today);
+      const completed = logs.filter(l => l.completedAt).length;
+      setTodayTotal(scheduled.length);
+      setTodayCompleted(completed);
+    }
+    fetchTodayStats();
+  }, [habits]);
 
   // Mood line chart data
   const moodChartData = useMemo(
@@ -115,7 +131,6 @@ export default function DashboardScreen() {
             key={id}
             data={weekdayStats}
             title="Weekday Performance"
-            width={340}
           />
         );
       case 'mood_trend':
@@ -127,7 +142,6 @@ export default function DashboardScreen() {
             min={1}
             max={10}
             color={Colors.info}
-            width={340}
           />
         ) : (
           <View key={id} style={[Cards.base, { marginBottom: Spacing[4], alignItems: 'center', paddingVertical: Spacing[6] }]}>
@@ -139,6 +153,8 @@ export default function DashboardScreen() {
         );
       case 'insights':
         return <InsightsWidget key={id} />;
+      case 'category_analysis':
+        return <CategoryAnalysisWidget key={id} />;
       default:
         return null;
     }
@@ -170,7 +186,7 @@ export default function DashboardScreen() {
             </View>
             <View style={{ width: 1, backgroundColor: Colors.border }} />
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={T.scoreSm}>{total > 0 ? `${Math.round((completed / total) * 100)}%` : '—'}</Text>
+              <Text style={T.scoreSm}>{todayTotal > 0 ? `${Math.round((todayCompleted / todayTotal) * 100)}%` : '—'}</Text>
               <Text style={T.caption}>Today</Text>
             </View>
           </View>
@@ -182,8 +198,4 @@ export default function DashboardScreen() {
     </SafeAreaView>
   );
 }
-
-// Missing import
-import { useMoodTimeline } from '@/hooks/use-mood-for-date';
-import { Radius } from '@design/tokens';
 
