@@ -13,7 +13,9 @@ import type { HabitWithLog } from '@src/types';
 import { getLastNDays, getShortDayName } from '@src/utils/dateUtils';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
 import { useHabitStore } from '@store/useHabitStore';
-import React, { useRef, useState } from 'react';
+import { getLogsForHabit } from '@src/services/logService';
+import type { HabitLog } from '@src/types';
+import React, { useRef, useState, useEffect } from 'react';
 import { Text, View } from 'react-native';
 
 interface HabitDetailProps {
@@ -23,8 +25,13 @@ interface HabitDetailProps {
 export function HabitDetail({ habit }: HabitDetailProps) {
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const streakCache = useHabitStore((s) => s.streakCache);
-  const todayLogsMap = useHabitStore((s) => s.todayLogsMap);
   const moodByDate = useMoodScoreMap();
+  
+  const [historyLogs, setHistoryLogs] = useState<HabitLog[]>([]);
+
+  useEffect(() => {
+    getLogsForHabit(habit.id).then(setHistoryLogs);
+  }, [habit.id]);
 
   const score = strengthScores.find((s) => s.habitId === habit.id);
   const streak = streakCache.get(habit.id);
@@ -38,9 +45,10 @@ export function HabitDetail({ habit }: HabitDetailProps) {
   const completionRate = score?.completionRate ?? 0;
   const consistencyScore = score?.consistencyScore ?? 0;
 
-  // Mood on days this habit was completed vs not
   const moodOnComplete: number[] = [];
   const moodOnMiss: number[] = [];
+
+  const completedDates = new Set(historyLogs.filter(l => l.completedAt !== null).map(l => l.date));
 
   return (
     <View style={{ gap: Spacing[4], paddingBottom: Spacing[6] }}>
@@ -52,9 +60,6 @@ export function HabitDetail({ habit }: HabitDetailProps) {
           {habit.description ? (
             <Text style={T.caption}>{habit.description}</Text>
           ) : null}
-        </View>
-        <View style={{ alignItems: 'center' }}>
-          <ProgressRing progress={completionRate} size={52} strokeWidth={5} color={habit.color} />
         </View>
       </View>
 
@@ -98,9 +103,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
         <Text style={[T.label, { marginBottom: Spacing[3] }]}>Last 30 Days</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
           {last30.map((date) => {
-            const log = todayLogsMap.get(date);
-            // We only have today's log in todayLogsMap — for history, use streak data as proxy
-            const completed = log?.completedAt !== null && log !== undefined;
+            const completed = completedDates.has(date);
             const isToday = date === last30[last30.length - 1];
             return (
               <View

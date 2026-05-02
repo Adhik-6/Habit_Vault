@@ -14,7 +14,7 @@ import {
   buildDayIntensities,
   computeWeekdayStats,
 } from '../utils/analytics';
-import { filterHabitsForDate } from '../services/habitService';
+import { filterHabitsForDate, isHabitScheduledForDate } from '../services/habitService';
 import { getLast365Days, getLast30Days, toDateString } from '../utils/dateUtils';
 import type { HabitLog } from '../types';
 
@@ -93,7 +93,8 @@ export const useAnalyticsStore = create<AnalyticsStore>()((set, get) => ({
       // Strength scores
       const strengthScores: HabitStrengthScore[] = habits.map((h) => {
         const logs = logsByHabit.get(h.id) ?? [];
-        return computeHabitStrengthScore(h.id, logs, last30);
+        const habitScheduledDates = last30.filter(d => isHabitScheduledForDate(h, d));
+        return computeHabitStrengthScore(h.id, logs, habitScheduledDates);
       });
 
       const globalScore = strengthScores.length > 0
@@ -103,7 +104,8 @@ export const useAnalyticsStore = create<AnalyticsStore>()((set, get) => ({
       // Insights (aggregate across all habits)
       const insights: HabitInsight[] = habits.flatMap((h) => {
         const logs = logsByHabit.get(h.id) ?? [];
-        return generateInsights(h.id, h.name, logs, last30);
+        const habitScheduledDates = last30.filter(d => isHabitScheduledForDate(h, d));
+        return generateInsights(h.id, h.name, logs, habitScheduledDates);
       });
 
       // Failure patterns (global)
@@ -143,7 +145,8 @@ export const useAnalyticsStore = create<AnalyticsStore>()((set, get) => ({
 
     const logs = await getLogsForHabit(habitId);
     const last30 = getLast30Days();
-    const score = computeHabitStrengthScore(habitId, logs, last30);
+    const habitScheduledDates = last30.filter(d => isHabitScheduledForDate(habit, d));
+    const score = computeHabitStrengthScore(habitId, logs, habitScheduledDates);
 
     set((state) => ({
       strengthScores: state.strengthScores.map((s) =>

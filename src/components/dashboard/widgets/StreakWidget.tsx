@@ -22,7 +22,7 @@ interface StreakWidgetProps {
 }
 
 export function StreakWidget({ habitId }: StreakWidgetProps) {
-  const streakCache = useHabitStore((s) => s.streakCache);
+  const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const habits = useHabitStore((s) => s.habits);
 
   // Find the best streak (or habit-specific)
@@ -31,18 +31,18 @@ export function StreakWidget({ habitId }: StreakWidgetProps) {
   let habitName = 'Best Habit';
 
   if (habitId) {
-    const data = streakCache.get(habitId);
+    const scoreObj = strengthScores.find(s => s.habitId === habitId);
     const habit = habits.find((h) => h.id === habitId);
-    current = data?.current ?? 0;
-    longest = data?.longest ?? 0;
+    current = scoreObj?.streak?.current ?? 0;
+    longest = scoreObj?.streak?.longest ?? 0;
     habitName = habit?.name ?? '';
   } else {
     // Find habit with highest current streak
-    for (const [id, data] of streakCache) {
-      if (data.current > current) {
-        current = data.current;
-        longest = data.longest;
-        const h = habits.find((h) => h.id === id);
+    for (const score of strengthScores) {
+      if (score.streak.current > current) {
+        current = score.streak.current;
+        longest = score.streak.longest;
+        const h = habits.find((h) => h.id === score.habitId);
         habitName = h?.name ?? '';
       }
     }

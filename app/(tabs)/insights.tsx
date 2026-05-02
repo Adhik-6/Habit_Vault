@@ -163,7 +163,6 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
   const habits = useHabitStore((s) => s.habits);
   const habitsForDate = useHabitsForSelectedDate();
   const habitMap = new Map(habitsForDate.map((h) => [h.id, h]));
-  const streakCache = useHabitStore((s) => s.streakCache);
 
   const sorted = [...strengthScores].sort((a, b) => b.score - a.score);
 
@@ -183,7 +182,7 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
       {sorted.map((s, i) => {
         const habit = habits.find((h) => h.id === s.habitId);
         const habitWithLog = habitMap.get(s.habitId);
-        const streak = streakCache.get(s.habitId);
+        const streak = s.streak;
         if (!habit) return null;
 
         const rank = i + 1;

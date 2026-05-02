@@ -23,7 +23,6 @@ export default function HabitDashboardScreen() {
   const formRef = useRef<HabitFormRef>(null);
 
   const todayLogsMap = useHabitStore((s) => s.todayLogsMap);
-  const streakCache = useHabitStore((s) => s.streakCache);
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   
   const [localHabit, setLocalHabit] = React.useState<HabitWithLog | null>(null);
@@ -42,8 +41,9 @@ export default function HabitDashboardScreen() {
       
       if (h) {
         const todayLog = todayLogsMap.get(h.id) ?? null;
-        const streak = streakCache.get(h.id) ?? { current: 0, longest: 0, lastCompletedDate: null };
-        const strengthScore = strengthScores.find((s) => s.habitId === h.id)?.score ?? 0;
+        const scoreObj = strengthScores.find((s) => s.habitId === h.id);
+        const streak = scoreObj?.streak ?? { current: 0, longest: 0, lastCompletedDate: null };
+        const strengthScore = scoreObj?.score ?? 0;
         setLocalHabit({
           ...h,
           todayLog,
@@ -55,7 +55,7 @@ export default function HabitDashboardScreen() {
       setLoading(false);
     }
     load();
-  }, [id, habits, todayLogsMap, streakCache, strengthScores]);
+  }, [id, habits, todayLogsMap, strengthScores]);
 
   if (loading) {
     return <SafeAreaView style={Layout.screen} />;

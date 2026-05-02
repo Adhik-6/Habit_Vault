@@ -163,22 +163,32 @@ export async function reorderHabits(orderedIds: string[]): Promise<void> {
 // ── Scheduling helpers ──────────────────────────────────────────────────────
 
 /**
+ * Returns true if the habit is scheduled for the given date, taking into account
+ * the creation date and frequency rules.
+ */
+export function isHabitScheduledForDate(habit: Habit, dateStr: string): boolean {
+  const createdDate = habit.createdAt.split('T')[0];
+  if (dateStr < createdDate) return false;
+
+  const dayOfWeek = new Date(dateStr + 'T12:00:00').getDay();
+  const rule: FrequencyRule = habit.frequencyRules;
+
+  if (rule.type === 'daily') return true;
+  if (rule.type === 'weekly' && rule.daysOfWeek) {
+    return rule.daysOfWeek.includes(dayOfWeek);
+  }
+  if (rule.type === 'custom' && rule.daysOfWeek) {
+    return rule.daysOfWeek.includes(dayOfWeek);
+  }
+  return true;
+}
+
+/**
  * Returns only habits that should be tracked on the given date,
  * based on their frequencyRules.
  */
 export function filterHabitsForDate(habits: Habit[], dateStr: string): Habit[] {
-  const dayOfWeek = new Date(dateStr + 'T12:00:00').getDay();
-  return habits.filter((h) => {
-    const rule: FrequencyRule = h.frequencyRules;
-    if (rule.type === 'daily') return true;
-    if (rule.type === 'weekly' && rule.daysOfWeek) {
-      return rule.daysOfWeek.includes(dayOfWeek);
-    }
-    if (rule.type === 'custom' && rule.daysOfWeek) {
-      return rule.daysOfWeek.includes(dayOfWeek);
-    }
-    return true;
-  });
+  return habits.filter((h) => isHabitScheduledForDate(h, dateStr));
 }
 
 // ── Bulk export helper ──────────────────────────────────────────────────────

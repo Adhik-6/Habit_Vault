@@ -1,4 +1,1 @@
 ## TODO
-1. The heatmap in the habits dashboard page is not showing the any progress at all. This heatmap should also show the depth of the completion. Also the consistency section in this page seems to always show 100% consistency, which is not correct. This needs to be fixed. Same for the streaks section in this page.
-2. The habits must consider only from the date of creation for all the analytics.
-3. There seems to be circular progress bars in the specific habits dashboard page's top section, This is showning some progress but the users won't be able o figure out what it is and what is the shown %, do something about it..

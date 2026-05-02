@@ -2,6 +2,7 @@
 
 import { filterHabitsForDate } from '@/src/services/habitService';
 import { useHabitStore } from '@/src/store/useHabitStore';
+import { useAnalyticsStore } from '@/src/store/useAnalyticsStore';
 import type { HabitWithLog, CategoryWithHabits } from '@/src/types';
 import { useMemo } from 'react';
 
@@ -10,23 +11,23 @@ export function useHabitsForSelectedDate(): HabitWithLog[] {
     const habits = useHabitStore((s) => s.habits);
     const selectedDate = useHabitStore((s) => s.selectedDate);
     const todayLogsMap = useHabitStore((s) => s.todayLogsMap);
-    const streakCache = useHabitStore((s) => s.streakCache);
-    const scoreCache = useHabitStore((s) => s.scoreCache);
+    const strengthScores = useAnalyticsStore((s) => s.strengthScores);
 
     // Compute the derived data and memoize it based on those dependencies
     return useMemo(() => {
         const scheduled = filterHabitsForDate(habits, selectedDate);
         return scheduled.map((h): HabitWithLog => {
             const log = todayLogsMap.get(h.id) ?? null;
+            const scoreObj = strengthScores.find(s => s.habitId === h.id);
             return {
                 ...h,
                 todayLog: log,
                 isCompleted: !!log?.completedAt,
-                streak: streakCache.get(h.id) ?? { current: 0, longest: 0, lastCompletedDate: null },
-                strengthScore: scoreCache.get(h.id) ?? 0,
+                streak: scoreObj?.streak ?? { current: 0, longest: 0, lastCompletedDate: null },
+                strengthScore: scoreObj?.score ?? 0,
             };
         });
-    }, [habits, selectedDate, todayLogsMap, streakCache, scoreCache]);
+    }, [habits, selectedDate, todayLogsMap, strengthScores]);
 }
 
 export function useCategoriesWithHabits(): CategoryWithHabits[] {

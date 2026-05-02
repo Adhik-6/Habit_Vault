@@ -85,24 +85,41 @@ export function computeCompletionRate(
 // Measures how evenly distributed completions are over recent period.
 // ─────────────────────────────────────────────
 
-export function computeConsistencyScore(logs: HabitLog[], windowDays = 30): number {
-  const cutoff = addDays(toDateString(), -windowDays);
-  const recentLogs = logs.filter((l) => l.date >= cutoff && l.completedAt !== null);
+export function computeConsistencyScore(logs: HabitLog[], scheduledDates: string[]): number {
+  if (scheduledDates.length === 0) return 0;
+  
+  const completedDates = new Set(logs.filter((l) => l.completedAt !== null).map(l => l.date));
+  const recentLogs = scheduledDates.filter(d => completedDates.has(d));
 
   if (recentLogs.length === 0) return 0;
 
   // Group by week
   const weekMap = new Map<string, number>();
-  for (const log of recentLogs) {
-    const d = new Date(log.date + 'T12:00:00');
-    // ISO week key
+  
+  // Initialize all active weeks with 0
+  for (const dateStr of scheduledDates) {
+    const d = new Date(dateStr + 'T12:00:00');
     d.setDate(d.getDate() - d.getDay());
     const weekKey = toDateString(d);
-    weekMap.set(weekKey, (weekMap.get(weekKey) ?? 0) + 1);
+    if (!weekMap.has(weekKey)) weekMap.set(weekKey, 0);
+  }
+
+  // Count completions
+  for (const dateStr of recentLogs) {
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() - d.getDay());
+    const weekKey = toDateString(d);
+    if (weekMap.has(weekKey)) {
+      weekMap.set(weekKey, weekMap.get(weekKey)! + 1);
+    }
   }
 
   const weeks = Array.from(weekMap.values());
-  if (weeks.length === 0) return 0;
+  if (weeks.length <= 1) {
+    // If the habit spans only 1 calendar week, variance is meaningless.
+    // Fall back to simple completion rate.
+    return recentLogs.length / scheduledDates.length;
+  }
 
   const avg = weeks.reduce((a, b) => a + b, 0) / weeks.length;
   const variance = weeks.reduce((sum, w) => sum + Math.pow(w - avg, 2), 0) / weeks.length;
@@ -123,8 +140,8 @@ export function computeHabitStrengthScore(
   scheduledDates: string[],
 ): HabitStrengthScore {
   const completionRate = computeCompletionRate(logs, scheduledDates);
-  const consistencyScore = computeConsistencyScore(logs);
-  const { current, longest } = computeStreak(logs);
+  const consistencyScore = computeConsistencyScore(logs, scheduledDates);
+  const { current, longest, lastCompletedDate } = computeStreak(logs);
 
   // Streak bonus: max 20 pts (10 for current, 10 for longest relative to days)
   const days = scheduledDates.length || 1;
@@ -133,7 +150,7 @@ export function computeHabitStrengthScore(
   const baseScore = completionRate * 50 + consistencyScore * 30 + streakBonus;
   const score = Math.round(Math.min(100, Math.max(0, baseScore)));
 
-  return { habitId, score, completionRate, consistencyScore, streakBonus };
+  return { habitId, score, completionRate, consistencyScore, streakBonus, streak: { current, longest, lastCompletedDate } };
 }
 
 // ─────────────────────────────────────────────

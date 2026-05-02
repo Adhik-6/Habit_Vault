@@ -124,6 +124,7 @@ export interface HabitStrengthScore {
   completionRate: number; // 0-1
   consistencyScore: number; // 0-1
   streakBonus: number; // 0-20 extra points
+  streak: StreakData;
 }
 
 /** Aggregated data for a single calendar day (for heatmap + calendar) */
