@@ -5,7 +5,7 @@
   <p>A beautiful, offline-first habit tracking application designed to help you build and sustain powerful daily routines.</p>
   
    <!-- Badges -->
-  <p>
+  <!-- <p>
     <a href="https://github.com/Adhik-6/Habit_Vault">
       <img src="https://img.shields.io/github/last-commit/Adhik-6/Habit_Vault" alt="last update" />
     </a>
@@ -19,12 +19,12 @@
 
   <!-- Links -->
   <h4>
-    <a href="https://github.com/Adhik-6/Habit_Vault">Documentation</a>
-    <span> · </span>
+    <!-- <a href="https://github.com/Adhik-6/Habit_Vault">Documentation</a> -->
+    <!-- <span> · </span> -->
     <a href="https://github.com/Adhik-6/Habit_Vault/issues/">Report Bug</a>
     <span> · </span>
     <a href="https://github.com/Adhik-6/Habit_Vault/issues/">Request Feature</a>
-  </h4>
+  </h4> 
 
 </div>
 
@@ -50,7 +50,6 @@
 - [:eyes: Usage](#eyes-usage)
 - [:compass: Roadmap](#compass-roadmap)
 - [:wave: Contributing](#wave-contributing)
-  - [Top contributors](#top-contributors)
 - [:grey\_question: FAQ](#grey_question-faq)
 - [:warning: License](#warning-license)
 - [:handshake: Contact](#handshake-contact)
@@ -67,7 +66,10 @@ Building sustainable habits requires a system that is both engaging and friction
 <div align="center" style="margin-bottom: 80px;">
   <div style="margin-bottom: 40px;">
     <h3>Home & Dashboard</h3>
-    <p><i>Screenshots of the collapsible calendar, daily trackers, and rich analytical charts will be placed here.</i></p>
+    <p>
+      <img src="./screenshots/home_page.jpeg" alt="Home page screenshot" width="45%" />
+      <img src="./screenshots/habits_page.jpeg" alt="Habits page screenshot" width="45%" />
+    </p>
   </div>
 </div>
 
@@ -187,11 +189,11 @@ Contributions are what make the open source community such an amazing place to l
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-### Top contributors
+<!-- ### Top contributors
 
 <a href="https://github.com/Adhik-6/Habit_Vault/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=Adhik-6/Habit_Vault" alt="contrib.rocks image" />
-</a>
+</a> -->
 
 <!-- FAQ -->
 ## :grey_question: FAQ
