@@ -1,6 +1,9 @@
 <div id="readme-top" align="center">
 
+
   <h1>HabitVault</h1>
+
+  <img src="./assets/images/app-icon.png" alt="HabitVault Logo" width="200" style="border-radius: 10%; margin-bottom: 20px;" />
   
   <p>A beautiful, offline-first habit tracking application designed to help you build and sustain powerful daily routines.</p>
   
@@ -67,7 +70,7 @@ Building sustainable habits requires a system that is both engaging and friction
   <div style="margin-bottom: 40px;">
     <h3>Home & Dashboard</h3>
     <p>
-      <img src="./screenshots/home_page.jpeg" alt="Home page screenshot" width="45%" />
+      <img src="./screenshots/home_page.jpeg" alt="Home page screenshot" width="45%" style="margin-right: 5%;" />
       <img src="./screenshots/habits_page.jpeg" alt="Habits page screenshot" width="45%" />
     </p>
   </div>
@@ -175,6 +178,7 @@ HabitVault is designed to be highly intuitive:
 - [x] CSV Export via Native Share Sheets.
 - [ ] Cross-device synchronization (Optional Cloud Sync).
 - [ ] Lock-screen Widgets (iOS/Android).
+- [ ] Habit Reminders & Notifications.
 
 See the [open issues](https://github.com/Adhik-6/Habit_Vault/issues) for a full list of proposed features (and known issues).
 
