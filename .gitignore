@@ -45,3 +45,6 @@ app-example
 # Others
 /apk_builds
 *.apk
+
+.idea/
+.vscode/
