@@ -8,6 +8,7 @@ import { shareExportCSV, pickAndImportBackup, shareBackupJSON } from '@services/
 import { useHabitStore } from '@store/useHabitStore';
 import { useRef, useState } from 'react';
 import { ManageCategoriesSheet } from '@src/components/habits/ManageCategoriesSheet';
+import { AccentColorSheet } from '@src/components/settings/AccentColorSheet';
 import type { BottomSheetRef } from '@src/components/common/BottomSheet';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -70,6 +71,7 @@ export default function SettingsScreen() {
   const habits = useHabitStore((s) => s.habits);
   const logs = useHabitStore((s) => s.todayLogsMap);
   const manageCategoriesRef = useRef<BottomSheetRef>(null);
+  const accentColorRef = useRef<BottomSheetRef>(null);
 
   async function handleExportJSON() {
     setExportingJSON(true);
@@ -153,6 +155,13 @@ export default function SettingsScreen() {
             onPress={() => manageCategoriesRef.current?.open()}
             color={Colors.accent}
           />
+          <SettingRow
+            icon="color-palette-outline"
+            label="Accent Color"
+            description="Default color for uncategorized habits"
+            onPress={() => accentColorRef.current?.open()}
+            color={Colors.accent}
+          />
           
           <Text style={[T.label, { marginBottom: Spacing[3], marginTop: Spacing[4] }]}>Data & Backup</Text>
 
@@ -219,6 +228,7 @@ export default function SettingsScreen() {
         </Animated.View>
       </ScrollView>
       <ManageCategoriesSheet ref={manageCategoriesRef} />
+      <AccentColorSheet ref={accentColorRef} />
     </SafeAreaView>
   );
 }

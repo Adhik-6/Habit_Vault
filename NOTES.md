@@ -28,3 +28,16 @@ npx eas build -p ios --profile production --clear-cache
 4. `npx expo prebuild --clean` (if config/assets changed)
 5. `npx eas build -p android --profile production --clear-cache`
 6. Install APK
+
+### Workflow in local building
+1. Make changes
+2. `npx expo prebuild --platform android --clean` - Only needed for first time initialization.
+3. `cd android`
+4. `./gradlew assembleRelease`
+5. The final generated apk file is available at `android/app/build/outputs/apk/release/app-release.apk`
+
+### If Ran into errors while building the app:
+1. `cd ./android/`
+2. `rm -rf app/.cxx app/build`
+3. `./gradlew clean`
+4. Finally `./gradlew assembleRelease`

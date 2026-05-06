@@ -10,21 +10,19 @@ import {
 } from '@expo-google-fonts/inter';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
-import { precomputeAnalytics, useHabitStore } from '@store/useHabitStore';
+import { useHabitStore } from '@store/useHabitStore';
 import { useMoodStore } from '@store/useMoodStore';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-// 1. Swap the Expo status bar for React Native's native status bar
-import { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, StatusBar } from 'react-native'; // <-- Added AppState here
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Keep splash visible until fonts + DB are ready
 SplashScreen.preventAutoHideAsync();
 
-// Override the React Navigation dark theme to match our design system
 const AppTheme = {
   ...DarkTheme,
   colors: {
@@ -50,56 +48,81 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  const loadHabits = useHabitStore((s) => s.loadHabits);
-  const habits = useHabitStore((s) => s.habits);
-  const loadMoodLogs = useMoodStore((s) => s.loadMoodLogs);
-  const recomputeAll = useAnalyticsStore((s) => s.recomputeAll);
+  // Split initialization into two strictly ordered steps
+  const [dbReady, setDbReady] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
+  // STEP 1: Initialize the SQLite Database
   useEffect(() => {
-    async function bootstrap() {
+    async function prepareDb() {
       try {
-        // 1. Initialize SQLite (idempotent — runs migrations once)
         await initDatabase();
-        // 2. Load initial data into Zustand stores
-        await loadHabits();
-        await loadMoodLogs();
-        // 3. Precompute analytics in the background (non-blocking)
-        recomputeAll();
+
+        // The "Magic" Fix: Give the Android SQLite Write-Ahead Log (WAL) 
+        // a tiny 150ms breather to flush to the disk before querying it.
+        await new Promise(resolve => setTimeout(resolve, 150));
       } catch (e) {
-        console.error('[Bootstrap] Error:', e);
+        console.error('[Bootstrap] DB Error:', e);
+      } finally {
+        setDbReady(true);
       }
     }
-    bootstrap();
+    prepareDb();
   }, []);
 
-  // Background streak/score precompute after habits are loaded
+  // STEP 2: Fetch Data ONLY after the DB is fully locked and loaded
   useEffect(() => {
-    if (habits.length > 0) {
-      precomputeAnalytics(habits);
-    }
-  }, [habits.length]);
+    if (!dbReady) return; // Do not fetch if the DB is asleep
 
+    async function fetchData() {
+      try {
+        await useHabitStore.getState().loadHabits();
+        await useMoodStore.getState().loadMoodLogs();
+        useAnalyticsStore.getState().recomputeAll();
+      } catch (e) {
+        console.error('[Bootstrap] Data Fetch Error:', e);
+      } finally {
+        setDataLoaded(true);
+      }
+    }
+    fetchData();
+  }, [dbReady]);
+
+  // STEP 3: Hide the Splash Screen safely
   useEffect(() => {
-    if ((fontsLoaded || fontError) && habits !== undefined) {
+    if ((fontsLoaded || fontError) && dataLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError, habits]);
+  }, [fontsLoaded, fontError, dataLoaded]);
 
-  if (!fontsLoaded && !fontError) return null;
+  // STEP 4: Bulletproof Foreground Syncing
+  // Whenever you close the app and reopen it from the background, 
+  // silently fetch fresh data to guarantee no blank screens ever.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && dataLoaded) {
+        useHabitStore.getState().loadHabits();
+        useMoodStore.getState().loadMoodLogs();
+      }
+    });
+    return () => subscription.remove();
+  }, [dataLoaded]);
+
+  // Prevent ANY rendering until everything is successfully in memory
+  if ((!fontsLoaded && !fontError) || !dataLoaded) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ThemeProvider value={AppTheme}>
-          {/* 2. Move the StatusBar up here so it wraps the Stack, and use barStyle="light-content" */}
           <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
-
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
               name="modal"
               options={{ presentation: 'modal', headerShown: false }}
             />
+            <Stack.Screen name="habit/[id]" options={{ headerShown: false }} />
           </Stack>
         </ThemeProvider>
       </SafeAreaProvider>

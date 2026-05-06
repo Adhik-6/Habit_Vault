@@ -233,6 +233,7 @@ Project Link: [https://github.com/Adhik-6/Habit_Vault](https://github.com/Adhik-
  - [React Native Reanimated](https://docs.swmansion.com/react-native-reanimated/)
  - [Zustand](https://github.com/pmndrs/zustand)
  - [React Native SVG](https://github.com/software-mansion/react-native-svg)
+ - [Antigravity](https://antigravity.google/)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

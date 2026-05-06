@@ -14,12 +14,6 @@ import {
   View
 } from 'react-native';
 
-// ── Colour palette ────────────────────────────────────────────────────────────
-const COLORS = [
-  '#6366F1', '#EC4899', '#F59E0B', '#10B981',
-  '#38BDF8', '#A855F7', '#EF4444', '#84CC16',
-  '#F97316', '#06B6D4',
-];
 
 // ── Type option ───────────────────────────────────────────────────────────────
 const TYPES: { value: HabitType; label: string; icon: string }[] = [
@@ -31,14 +25,12 @@ const TYPES: { value: HabitType; label: string; icon: string }[] = [
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// ── Form state ────────────────────────────────────────────────────────────────
 interface FormState {
   name: string;
   description: string;
   type: HabitType;
   targetValue: string;
   unit: string;
-  color: string;
   frequencyType: 'daily' | 'weekly';
   selectedDays: number[];
   compositeSteps: CompositeStep[];
@@ -52,7 +44,6 @@ function defaultForm(): FormState {
     type: 'boolean',
     targetValue: '1',
     unit: '',
-    color: '#6366F1',
     frequencyType: 'daily',
     selectedDays: [1, 2, 3, 4, 5],
     compositeSteps: [],
@@ -67,7 +58,6 @@ function habitToForm(habit: Habit): FormState {
     type: habit.type,
     targetValue: String(habit.targetValue),
     unit: habit.unit,
-    color: habit.color,
     frequencyType: habit.frequencyRules.type === 'daily' ? 'daily' : 'weekly',
     selectedDays: habit.frequencyRules.daysOfWeek ?? [1, 2, 3, 4, 5],
     compositeSteps: habit.compositeSteps,
@@ -147,13 +137,18 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
             ? { type: 'daily' }
             : { type: 'weekly', daysOfWeek: form.selectedDays };
 
+        // Color is derived from the selected category; fallback to default
+        const categoryColor = form.categoryId
+          ? (categories.find((c) => c.id === form.categoryId)?.color ?? '#6366F1')
+          : '#6366F1';
+
         const payload = {
           name: form.name.trim(),
           description: form.description.trim(),
           type: form.type,
           targetValue: parseFloat(form.targetValue) || 1,
           unit: form.unit.trim(),
-          color: form.color,
+          color: categoryColor,
           frequencyRules,
           compositeSteps: form.compositeSteps,
           categoryId: form.categoryId,
@@ -342,25 +337,6 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
             )}
           </View>
 
-          {/* Colour picker */}
-          <View>
-            <Text style={[T.label, { marginBottom: Spacing[2] }]}>Colour</Text>
-            <View style={{ flexDirection: 'row', gap: Spacing[3], flexWrap: 'wrap', marginStart: Spacing[2] }}>
-              {COLORS.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  onPress={() => update({ color: c })}
-                  style={{
-                    width: 32, height: 32, borderRadius: 16,
-                    backgroundColor: c,
-                    borderWidth: form.color === c ? 3 : 0,
-                    borderColor: '#fff',
-                    transform: [{ scale: form.color === c ? 1.15 : 1 }],
-                  }}
-                />
-              ))}
-            </View>
-          </View>
 
           {/* Category assignment */}
           {categories.length > 0 && (

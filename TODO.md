@@ -1,4 +1,4 @@
 ## TODO
-1. Polish the github page
-2. The colors must be assignable to the categories and the habits under the category must share the same color. As for the uncategorized habits, they can be assigned the accent color. Thus remove the color picker option from the habit creation form and add it to the category creation form. 
-3. In the settings page, add an option to change the accent color. This will be the default color for the uncategorized habits and also the color for the categories that don't have a color assigned to them.
+1. When the accent color is changed, it must change the colors of the buttons, heatmap and other components in the app that seem to have a kind of blue color (indigo blue). This blue color seems to be the accent color of the app and when the user tries changing the accent color in the settings, the accent color of the app must also be changed.
+2. Credits to antigravity in README.md
+3. I created few habits. then i closed the app and reopened it. The habits are not appearing until i create a new habit, this was the case for the categories & moods and all other pages that has data. I think the problem is that the data is not being fetched from the local storage when the app is opened.

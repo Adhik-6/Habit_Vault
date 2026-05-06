@@ -10,6 +10,7 @@ import type { HabitWithLog } from '@src/types';
 import { useHabitStore } from '@store/useHabitStore';
 import { Colors, Spacing, Radius, Shadows } from '@design/tokens';
 import { Cards, Text as T, Buttons } from '@design/components';
+import { useHabitColor } from '@/hooks/use-habit-color';
 
 const SWIPE_THRESHOLD = 80;
 
@@ -27,6 +28,11 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
   const logQuantityHabit = useHabitStore((s) => s.logQuantityHabit);
   const logDurationHabit = useHabitStore((s) => s.logDurationHabit);
   const toggleCompositeStepAction = useHabitStore((s) => s.toggleCompositeStep);
+
+  const habitColor = useHabitColor(habit.categoryId);
+  const accentMuted = habitColor + '1A';
+  const accentDim = habitColor + '33';
+  const accentGlow = habitColor;
 
   const translateX = useSharedValue(0);
   const checkScale = useSharedValue(1);
@@ -89,8 +95,8 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
     setDurationMinutes('');
   };
 
-  const bgColor = habit.isCompleted ? Colors.accentMuted : Colors.surface;
-  const borderColor = habit.isCompleted ? Colors.accentDim : Colors.border;
+  const bgColor = habit.isCompleted ? accentMuted : Colors.surface;
+  const borderColor = habit.isCompleted ? accentDim : Colors.border;
 
   // Quantity/duration progress pct
   const quantityPct = habit.targetValue > 0
@@ -121,12 +127,12 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
               <TouchableOpacity onPress={handleToggle} hitSlop={10}>
                 <Animated.View style={[{
                   width: 30, height: 30, borderRadius: 15,
-                  backgroundColor: habit.isCompleted ? Colors.accent : Colors.surfaceElevated,
+                  backgroundColor: habit.isCompleted ? habitColor : Colors.surfaceElevated,
                   borderWidth: 2,
-                  borderColor: habit.isCompleted ? Colors.accent : Colors.border,
+                  borderColor: habit.isCompleted ? habitColor : Colors.border,
                   alignItems: 'center', justifyContent: 'center',
                 },
-                habit.isCompleted ? Shadows.glow : {},
+                habit.isCompleted ? { shadowColor: habitColor, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: 4 } : {},
                 checkStyle,
                 ]}>
                   {habit.isCompleted && <Ionicons name="checkmark" size={15} color="#fff" />}
@@ -183,9 +189,9 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
                 </Text>
                 <TouchableOpacity
                   onPress={() => handleQuantityChange(1)}
-                  style={[Buttons.icon, { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.accentMuted, borderColor: Colors.accentDim }]}
+                  style={[Buttons.icon, { width: 30, height: 30, borderRadius: 8, backgroundColor: accentMuted, borderColor: accentDim }]}
                 >
-                  <Ionicons name="add" size={14} color={Colors.accentGlow} />
+                  <Ionicons name="add" size={14} color={accentGlow} />
                 </TouchableOpacity>
               </View>
             )}
@@ -193,7 +199,7 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
             {/* Duration timer button */}
             {habit.type === 'duration' && (
               <TouchableOpacity
-                style={[Buttons.icon, { backgroundColor: Colors.accentMuted, borderColor: Colors.accentDim }]}
+                style={[Buttons.icon, { backgroundColor: accentMuted, borderColor: accentDim }]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowDurationInput((v) => !v);
@@ -202,7 +208,7 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
                 <Ionicons
                   name={habit.isCompleted ? 'checkmark-circle' : 'timer-outline'}
                   size={18}
-                  color={habit.isCompleted ? Colors.success : Colors.accentGlow}
+                  color={habit.isCompleted ? Colors.success : accentGlow}
                 />
               </TouchableOpacity>
             )}
@@ -229,7 +235,7 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
               <View style={{
                 width: `${(habit.type === 'quantity' ? quantityPct : durationPct) * 100}%`,
                 height: 4,
-                backgroundColor: habit.isCompleted ? Colors.success : Colors.accent,
+                backgroundColor: habit.isCompleted ? Colors.success : habitColor,
                 borderRadius: 2,
               }} />
             </View>
@@ -247,7 +253,7 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
                 style={{ flex: 1, backgroundColor: Colors.surface, color: Colors.text, padding: Spacing[2], borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border }}
                 autoFocus
               />
-              <TouchableOpacity onPress={handleDurationSubmit} style={{ backgroundColor: Colors.accent, paddingHorizontal: Spacing[3], paddingVertical: Spacing[2], borderRadius: Radius.sm }}>
+              <TouchableOpacity onPress={handleDurationSubmit} style={{ backgroundColor: habitColor, paddingHorizontal: Spacing[3], paddingVertical: Spacing[2], borderRadius: Radius.sm }}>
                 <Text style={[T.sm, { color: '#fff' }]}>Log</Text>
               </TouchableOpacity>
             </View>
@@ -267,8 +273,8 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
                   >
                     <View style={{
                       width: 20, height: 20, borderRadius: 4,
-                      backgroundColor: done ? Colors.accent : Colors.surfaceElevated,
-                      borderWidth: 1.5, borderColor: done ? Colors.accent : Colors.border,
+                      backgroundColor: done ? habitColor : Colors.surfaceElevated,
+                      borderWidth: 1.5, borderColor: done ? habitColor : Colors.border,
                       alignItems: 'center', justifyContent: 'center',
                     }}>
                       {done && <Ionicons name="checkmark" size={11} color="#fff" />}

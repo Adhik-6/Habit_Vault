@@ -12,19 +12,19 @@ import { ProgressRing } from '@src/components/common/ProgressRing';
 import type { HabitWithLog } from '@src/types';
 import { getLastNDays, getShortDayName } from '@src/utils/dateUtils';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
-import { useHabitStore } from '@store/useHabitStore';
 import { getLogsForHabit } from '@src/services/logService';
 import type { HabitLog } from '@src/types';
 import React, { useRef, useState, useEffect } from 'react';
 import { Text, View } from 'react-native';
+import { useHabitColor } from '@/hooks/use-habit-color';
 
 interface HabitDetailProps {
   habit: HabitWithLog;
 }
 
 export function HabitDetail({ habit }: HabitDetailProps) {
+  const habitColor = useHabitColor(habit.categoryId);
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
-  const streakCache = useHabitStore((s) => s.streakCache);
   const moodByDate = useMoodScoreMap();
   
   const [historyLogs, setHistoryLogs] = useState<HabitLog[]>([]);
@@ -34,7 +34,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
   }, [habit.id]);
 
   const score = strengthScores.find((s) => s.habitId === habit.id);
-  const streak = streakCache.get(habit.id);
+  const streak = score?.streak;
 
   // Build 30-day completion trend from todayLogsMap + streakCache
   const last30 = getLastNDays(30);
@@ -54,7 +54,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
     <View style={{ gap: Spacing[4], paddingBottom: Spacing[6] }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[3] }}>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: habit.color }} />
+        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: habitColor }} />
         <View style={{ flex: 1 }}>
           <Text style={T.h3} numberOfLines={2}>{habit.name}</Text>
           {habit.description ? (
@@ -82,12 +82,12 @@ export function HabitDetail({ habit }: HabitDetailProps) {
       <View style={[Cards.compact]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing[2] }}>
           <Text style={T.label}>Consistency</Text>
-          <Text style={[T.sm, { color: Colors.accent }]}>{Math.round(consistencyScore * 100)}%</Text>
+          <Text style={[T.sm, { color: habitColor }]}>{Math.round(consistencyScore * 100)}%</Text>
         </View>
         <View style={{ backgroundColor: Colors.border, height: 6, borderRadius: 3, overflow: 'hidden' }}>
           <View style={{
             width: `${consistencyScore * 100}%`, height: 6,
-            backgroundColor: Colors.accent, borderRadius: 3,
+            backgroundColor: habitColor, borderRadius: 3,
           }} />
         </View>
         <Text style={[T.caption, { marginTop: Spacing[2] }]}>
@@ -111,7 +111,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
                 style={{
                   width: 20, height: 20, borderRadius: 4,
                   backgroundColor: completed
-                    ? habit.color
+                    ? habitColor
                     : isToday ? Colors.accentMuted : Colors.surfaceElevated,
                   borderWidth: isToday ? 1.5 : 0,
                   borderColor: Colors.accent,
