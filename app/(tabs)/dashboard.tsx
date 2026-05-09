@@ -25,11 +25,13 @@ import { CategoryAnalysisWidget } from '@src/components/dashboard/widgets/Catego
 import { Cards, Layout, Text as T } from '@design/components';
 import { Colors, Spacing, Radius } from '@design/tokens';
 import { Ionicons } from '@expo/vector-icons';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 
 // ── Insights widget ────────────────────────────────────────────────────────────
 
 function InsightsWidget() {
   const insights = useAnalyticsStore((s) => s.insights);
+  const ac = useAccentColors();
 
   if (insights.length === 0) {
     return (
@@ -55,7 +57,7 @@ function InsightsWidget() {
         const iconColor =
           insight.type === 'improving' ? Colors.success :
             insight.type === 'declining' ? Colors.danger :
-              insight.type === 'streak_risk' ? Colors.warning : Colors.accent;
+              insight.type === 'streak_risk' ? Colors.warning : ac.accent;
 
         return (
           <View

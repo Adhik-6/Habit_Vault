@@ -17,6 +17,7 @@ import type { HabitLog } from '@src/types';
 import React, { useRef, useState, useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { useHabitColor } from '@/hooks/use-habit-color';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 
 interface HabitDetailProps {
   habit: HabitWithLog;
@@ -26,6 +27,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
   const habitColor = useHabitColor(habit.categoryId);
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const moodByDate = useMoodScoreMap();
+  const ac = useAccentColors();
   
   const [historyLogs, setHistoryLogs] = useState<HabitLog[]>([]);
 
@@ -66,7 +68,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
       {/* Key metrics */}
       <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
         {[
-          { label: 'Strength', value: score?.score ?? 0, unit: '/100', color: Colors.accent },
+          { label: 'Strength', value: score?.score ?? 0, unit: '/100', color: ac.accent },
           { label: 'Streak', value: streak?.current ?? 0, unit: 'd', color: Colors.warning },
           { label: 'Best', value: streak?.longest ?? 0, unit: 'd', color: Colors.success },
           { label: 'Rate', value: Math.round(completionRate * 100), unit: '%', color: Colors.info },
@@ -112,9 +114,9 @@ export function HabitDetail({ habit }: HabitDetailProps) {
                   width: 20, height: 20, borderRadius: 4,
                   backgroundColor: completed
                     ? habitColor
-                    : isToday ? Colors.accentMuted : Colors.surfaceElevated,
+                    : isToday ? ac.accentMuted : Colors.surfaceElevated,
                   borderWidth: isToday ? 1.5 : 0,
-                  borderColor: Colors.accent,
+                  borderColor: ac.accent,
                 }}
               />
             );

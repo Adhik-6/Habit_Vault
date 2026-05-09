@@ -4,6 +4,7 @@
  * Pure View-based (no Skia needed) — works in Expo Go.
  */
 import { useHabitsForSelectedDate } from '@/hooks/use-habits-for-date';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 import { Cards, Text as T } from '@design/components';
 import { Colors, Spacing } from '@design/tokens';
 import type { DayIntensity } from '@src/types';
@@ -17,7 +18,7 @@ import React, { useMemo, useState } from 'react';
 import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
-const TIER_COLORS = ['transparent', '#1E1B4B', '#3730A3', '#4F46E5', '#6366F1'];
+// TIER_COLORS is now derived dynamically from the accent color via useAccentColors().
 const CELL = 11; // px per cell
 const GAP = 2;
 
@@ -77,6 +78,7 @@ function getMonthLabels(weeks: DayIntensity[][]): Array<{ col: number; label: st
 
 function DayDetail({ day, onClose }: { day: DayIntensity; onClose: () => void }) {
   const habitsForDate = useHabitsForSelectedDate();
+  const ac = useAccentColors();
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity
@@ -102,7 +104,7 @@ function DayDetail({ day, onClose }: { day: DayIntensity; onClose: () => void })
             )}
           </View>
           <TouchableOpacity onPress={onClose} style={{ alignSelf: 'flex-end' }}>
-            <Text style={[T.sm, { color: Colors.accent }]}>Close</Text>
+            <Text style={[T.sm, { color: ac.accent }]}>Close</Text>
           </TouchableOpacity>
         </Animated.View>
       </TouchableOpacity>
@@ -119,6 +121,8 @@ interface HeatmapWidgetProps {
 export function HeatmapWidget({ habitId }: HeatmapWidgetProps) {
   const dayIntensities = useAnalyticsStore((s) => s.dayIntensities);
   const [selectedDay, setSelectedDay] = useState<DayIntensity | null>(null);
+  const ac = useAccentColors();
+  const TIER_COLORS = ac.heatmapTiers;
 
   const weeks = useMemo(() => buildWeekGrid(dayIntensities), [dayIntensities]);
   const monthLabels = useMemo(() => getMonthLabels(weeks), [weeks]);
@@ -205,7 +209,7 @@ export function HeatmapWidget({ habitId }: HeatmapWidgetProps) {
                           width: CELL, height: CELL, borderRadius: 2,
                           backgroundColor: color,
                           borderWidth: isToday ? 1.5 : 0,
-                          borderColor: Colors.accentGlow,
+                          borderColor: ac.accentGlow,
                         }}
                       />
                     );

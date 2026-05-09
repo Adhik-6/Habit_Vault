@@ -11,6 +11,7 @@ import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useCategoriesWithHabits, useHabitsForSelectedDate, useUncategorizedHabits } from '@/hooks/use-habits-for-date';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 import { archiveHabit, deleteHabit } from '@services/habitService';
 import type { CategoryWithHabits, HabitWithLog } from '@src/types';
 import { useHabitStore } from '@store/useHabitStore';
@@ -65,11 +66,11 @@ function CategorySection({ category, onLongPressHabit }: {
         <HabitCard key={habit.id} habit={habit} onLongPress={onLongPressHabit} />
       ))}
 
-      {/* Category complete banner */}
+      {/* Category complete banner — uses the category's own color, not accent */}
       {pct === 1 && category.totalCount > 0 && (
         <Animated.View entering={ZoomIn.duration(300)} style={[Cards.accentBorder, { alignItems: 'center', paddingVertical: Spacing[3], flexDirection: 'row', justifyContent: 'center', gap: Spacing[2] }]}>
           <Text style={{ fontSize: 20 }}>🎉</Text>
-          <Text style={[T.bodyMedium, { color: Colors.accentGlow }]}>{category.name} complete!</Text>
+          <Text style={[T.bodyMedium, { color: category.color }]}>{category.name} complete!</Text>
         </Animated.View>
       )}
     </View>
@@ -138,6 +139,7 @@ function HabitContextMenu({
   formRef: React.RefObject<HabitFormRef>;
 }) {
   const loadHabits = useHabitStore((s) => s.loadHabits);
+  const ac = useAccentColors();
 
   if (!habit) return null;
 
@@ -182,7 +184,7 @@ function HabitContextMenu({
           <Text style={T.caption}>{habit.type} habit</Text>
         </View>
         {[
-          { icon: 'create-outline', label: 'Edit Habit', action: handleEdit, color: Colors.accent },
+          { icon: 'create-outline', label: 'Edit Habit', action: handleEdit, color: ac.accent },
           { icon: 'archive-outline', label: 'Archive', action: handleArchive, color: Colors.warning },
           { icon: 'trash-outline', label: 'Delete', action: handleDelete, color: Colors.danger },
         ].map((item) => (
@@ -214,6 +216,7 @@ export default function TodayScreen() {
   const categoriesWithHabits = useCategoriesWithHabits();
   const uncategorizedHabits = useUncategorizedHabits();
   const todayMood = useMoodStore((s) => s.todayMood);
+  const ac = useAccentColors();
 
   const completed = habitsForDate.filter((h) => h.isCompleted).length;
   const total = habitsForDate.length;
@@ -242,7 +245,7 @@ export default function TodayScreen() {
             {/* Mood button */}
             <TouchableOpacity
               onPress={() => moodSheetRef.current?.open()}
-              style={[Buttons.icon, { backgroundColor: todayMood ? Colors.accentMuted : Colors.surfaceElevated, borderColor: todayMood ? Colors.accentDim : Colors.border }]}
+              style={[Buttons.icon, { backgroundColor: todayMood ? ac.accentMuted : Colors.surfaceElevated, borderColor: todayMood ? ac.accentDim : Colors.border }]}
             >
               <Text style={{ fontSize: 18 }}>
                 {todayMood ? moodEmoji(todayMood.score) : '😐'}
@@ -251,9 +254,9 @@ export default function TodayScreen() {
             {/* Add habit */}
             <TouchableOpacity
               onPress={() => formRef.current?.openCreate()}
-              style={[Buttons.icon, { marginLeft: Spacing[2], backgroundColor: Colors.accentMuted, borderColor: Colors.accentDim }]}
+              style={[Buttons.icon, { marginLeft: Spacing[2], backgroundColor: ac.accentMuted, borderColor: ac.accentDim }]}
             >
-              <Ionicons name="add" size={22} color={Colors.accentGlow} />
+              <Ionicons name="add" size={22} color={ac.accentGlow} />
             </TouchableOpacity>
           </View>
         </View>
@@ -279,7 +282,7 @@ export default function TodayScreen() {
             {/* Progress summary */}
             {total > 0 && (
               <View style={[Cards.base, { margin: Spacing[5], marginTop: Spacing[2], flexDirection: 'row', alignItems: 'center', gap: Spacing[4] }]}>
-                <ProgressRing progress={pct} size={60} strokeWidth={5} color={pct === 1 ? Colors.success : Colors.accent} />
+                <ProgressRing progress={pct} size={60} strokeWidth={5} color={pct === 1 ? Colors.success : ac.accent} />
                 <View style={{ flex: 1 }}>
                   <Text style={T.h3}>
                     {completed}/{total} done

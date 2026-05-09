@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Colors, Spacing, Radius } from '@design/tokens';
 import { Cards, Text as T, Buttons } from '@design/components';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -56,6 +57,7 @@ export function DashboardGrid({ renderWidget }: DashboardGridProps) {
   const [widgets, setWidgets] = useState<WidgetConfig[]>(DEFAULT_WIDGETS);
   const [editMode, setEditMode] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
+  const ac = useAccentColors();
 
   // Load persisted order on mount
   useEffect(() => {
@@ -120,16 +122,16 @@ export function DashboardGrid({ renderWidget }: DashboardGridProps) {
           onPress={() => { setEditMode((v) => !v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
           style={[Buttons.ghost, {
             flexDirection: 'row', gap: Spacing[2],
-            borderWidth: 1, borderColor: editMode ? Colors.accent : Colors.border,
+            borderWidth: 1, borderColor: editMode ? ac.accent : Colors.border,
             borderRadius: Radius.lg, paddingHorizontal: Spacing[3], paddingVertical: Spacing[2],
           }]}
         >
           <Ionicons
             name={editMode ? 'checkmark' : 'grid-outline'}
             size={16}
-            color={editMode ? Colors.accent : Colors.textSecondary}
+            color={editMode ? ac.accent : Colors.textSecondary}
           />
-          <Text style={[T.sm, { color: editMode ? Colors.accent : Colors.textSecondary }]}>
+          <Text style={[T.sm, { color: editMode ? ac.accent : Colors.textSecondary }]}>
             {editMode ? 'Done' : 'Arrange'}
           </Text>
         </TouchableOpacity>
@@ -160,7 +162,7 @@ export function DashboardGrid({ renderWidget }: DashboardGridProps) {
                 <Ionicons
                   name={widget.visible ? 'eye' : 'eye-off-outline'}
                   size={18}
-                  color={widget.visible ? Colors.accent : Colors.textDim}
+                  color={widget.visible ? ac.accent : Colors.textDim}
                 />
               </TouchableOpacity>
 

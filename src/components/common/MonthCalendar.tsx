@@ -5,6 +5,7 @@ import { Cards, Layout, Text as T } from '@design/components';
 import { Colors, Radius, Spacing } from '@design/tokens';
 import { getMonthDates, getMonthName, getDayOfWeek, todayString } from '@src/utils/dateUtils';
 import { useHabitStore } from '@store/useHabitStore';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -12,6 +13,7 @@ export function MonthCalendar() {
   const today = todayString();
   const [viewDate, setViewDate] = useState(new Date());
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const ac = useAccentColors();
   
   const selectedDate = useHabitStore((s) => s.selectedDate);
   const setSelectedDate = useHabitStore((s) => s.setSelectedDate);
@@ -116,12 +118,12 @@ export function MonthCalendar() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: isSelected
-                    ? Colors.accent
+                    ? ac.accent
                     : isToday
-                      ? Colors.accentMuted
+                      ? ac.accentMuted
                       : 'transparent',
                   borderWidth: isToday && !isSelected ? 1 : 0,
-                  borderColor: Colors.accent,
+                  borderColor: ac.accent,
                 }}
               >
                 <Text
@@ -133,7 +135,7 @@ export function MonthCalendar() {
                         : isFuture
                           ? Colors.textDim
                           : isToday
-                            ? Colors.accentGlow
+                            ? ac.accentGlow
                             : Colors.text,
                       fontFamily: isToday || isSelected ? 'Inter_600SemiBold' : 'Inter_400Regular',
                     },

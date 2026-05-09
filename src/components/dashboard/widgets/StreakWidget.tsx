@@ -6,6 +6,7 @@ import { View, Text } from 'react-native';
 import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
 import { useHabitStore } from '@store/useHabitStore';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 import { Colors, Spacing, Shadows } from '@design/tokens';
 import { Cards, Text as T } from '@design/components';
 
@@ -24,6 +25,7 @@ interface StreakWidgetProps {
 export function StreakWidget({ habitId }: StreakWidgetProps) {
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const habits = useHabitStore((s) => s.habits);
+  const ac = useAccentColors();
 
   // Find the best streak (or habit-specific)
   let current = 0;
@@ -127,7 +129,7 @@ export function StreakWidget({ habitId }: StreakWidgetProps) {
             <View style={{
               width: `${pctToMilestone * 100}%`,
               height: 5,
-              backgroundColor: isOnFire ? Colors.warning : Colors.accent,
+              backgroundColor: isOnFire ? Colors.warning : ac.accent,
               borderRadius: 3,
             }} />
           </View>

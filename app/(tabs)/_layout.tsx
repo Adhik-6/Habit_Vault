@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Tabs } from 'expo-router';
 import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 
 // ── Tab icon component ────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ function TabIcon({
   color: string;
   focused: boolean;
 }) {
+  const ac = useAccentColors();
   return (
     <View
       style={{
@@ -24,7 +26,7 @@ function TabIcon({
         width: 48,
         height: 32,
         borderRadius: Radius.lg,
-        backgroundColor: focused ? Colors.accentMuted : 'transparent',
+        backgroundColor: focused ? ac.accentMuted : 'transparent',
         marginBottom: 13,
       }}
     >
@@ -38,6 +40,7 @@ function TabIcon({
 export default function TabLayout() {
   // Dynamically get the device's safe area padding
   const insets = useSafeAreaInsets();
+  const ac = useAccentColors();
 
   return (
     <Tabs
@@ -51,7 +54,7 @@ export default function TabLayout() {
       }}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.accentGlow,
+        tabBarActiveTintColor: ac.accentGlow,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarShowLabel: true,
         tabBarLabelStyle: {

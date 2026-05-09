@@ -6,6 +6,7 @@ import { Cards, Text as T } from '@design/components';
 import { Colors, Spacing } from '@design/tokens';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
 import { useHabitStore } from '@store/useHabitStore';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 import React from 'react';
 import { Text, View } from 'react-native';
 import Animated, {
@@ -17,7 +18,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-function ScoreGauge({ score }: { score: number }) {
+function ScoreGauge({ score, accentColor }: { score: number; accentColor: string }) {
   const SIZE = 120;
   const SW = 10;
   const R = (SIZE - SW) / 2;
@@ -41,7 +42,7 @@ function ScoreGauge({ score }: { score: number }) {
   // Color based on score
   const scoreColor =
     score >= 75 ? Colors.success :
-      score >= 50 ? Colors.accent :
+      score >= 50 ? accentColor :
         score >= 25 ? Colors.warning : Colors.danger;
 
   return (
@@ -74,6 +75,7 @@ export function StrengthScoreWidget() {
   const globalScore = useAnalyticsStore((s) => s.globalScore);
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const habits = useHabitStore((s) => s.habits);
+  const ac = useAccentColors();
 
   const top5 = [...strengthScores]
     .sort((a, b) => b.score - a.score)
@@ -94,7 +96,7 @@ export function StrengthScoreWidget() {
       {/* Gauge + score */}
       <View style={{ alignItems: 'center', marginBottom: Spacing[3] }}>
         <View style={{ position: 'relative', alignItems: 'center' }}>
-          <ScoreGauge score={globalScore} />
+          <ScoreGauge score={globalScore} accentColor={ac.accent} />
           <View style={{ position: 'absolute', bottom: 0, alignItems: 'center' }}>
             <Text style={T.score}>{globalScore}</Text>
             <Text style={[T.caption, { marginTop: -4 }]}>{scoreLabel}</Text>
@@ -115,7 +117,7 @@ export function StrengthScoreWidget() {
                 <Text style={[T.xs, { color: Colors.textDim, minWidth: 20 }]} numberOfLines={1}>#{i + 1}</Text>
                 <View style={{
                   width: 8, height: 8, borderRadius: 4,
-                  backgroundColor: habit.color ?? Colors.accent,
+                  backgroundColor: habit.color ?? ac.accent,
                 }} />
                 <Text style={[T.sm, { flex: 1 }]} numberOfLines={1}>{habit.name}</Text>
                 {/* Mini bar */}
@@ -123,7 +125,7 @@ export function StrengthScoreWidget() {
                   <View style={{
                     width: `${pct * 100}%`,
                     height: 4,
-                    backgroundColor: habit.color ?? Colors.accent,
+                    backgroundColor: habit.color ?? ac.accent,
                     borderRadius: 2,
                   }} />
                 </View>

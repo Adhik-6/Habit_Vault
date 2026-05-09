@@ -29,6 +29,7 @@ import { Cards, Layout, Text as T } from '@design/components';
 import { Colors, moodColor, Radius, Spacing } from '@design/tokens';
 import { scoreToEmoji } from '@services/moodService';
 import type { HabitWithLog } from '@src/types';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 
 // ── Tab definition ─────────────────────────────────────────────────────────
 
@@ -50,10 +51,11 @@ function OverviewTab() {
   const habitsForDate = useHabitsForSelectedDate();
   const completed = habitsForDate.filter((h) => h.isCompleted).length;
   const total = habitsForDate.length;
+  const ac = useAccentColors();
 
   const scoreColor =
     globalScore >= 75 ? Colors.success :
-      globalScore >= 50 ? Colors.accent :
+      globalScore >= 50 ? ac.accent :
         globalScore >= 25 ? Colors.warning : Colors.danger;
 
   const scoreLabel =
@@ -79,7 +81,7 @@ function OverviewTab() {
             <Text style={T.h2}>{scoreLabel}</Text>
             <Text style={T.caption}>{habits.length} habits · {total > 0 ? `${Math.round((completed / total) * 100)}% today` : 'no habits today'}</Text>
           </View>
-          {isComputing && <ActivityIndicator size="small" color={Colors.accent} />}
+          {isComputing && <ActivityIndicator size="small" color={ac.accent} />}
         </View>
         <TouchableOpacity
           onPress={recomputeAll}
@@ -94,7 +96,7 @@ function OverviewTab() {
       <Animated.View entering={FadeInDown.delay(160).duration(350)}>
         <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
           {[
-            { label: 'Habits', value: habits.length, icon: 'list', color: Colors.accent },
+            { label: 'Habits', value: habits.length, icon: 'list', color: ac.accent },
             { label: 'Insights', value: insights.length, icon: 'bulb', color: Colors.warning },
           ].map((stat) => (
             <View key={stat.label} style={[Cards.base, { flex: 1, alignItems: 'center', gap: Spacing[1] }]}>
@@ -126,8 +128,8 @@ function OverviewTab() {
                 streak_risk: { icon: 'flame-outline', color: Colors.warning },
                 worst_day: { icon: 'warning-outline', color: Colors.warning },
                 pattern: { icon: 'repeat-outline', color: Colors.info },
-                best_time: { icon: 'time-outline', color: Colors.accent },
-              } as Record<string, { icon: string; color: string }>)[insight.type] ?? { icon: 'bulb-outline', color: Colors.accent };
+                best_time: { icon: 'time-outline', color: ac.accent },
+              } as Record<string, { icon: string; color: string }>)[insight.type] ?? { icon: 'bulb-outline', color: ac.accent };
 
               return (
                 <View key={i} style={{
@@ -163,6 +165,7 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
   const habits = useHabitStore((s) => s.habits);
   const habitsForDate = useHabitsForSelectedDate();
   const habitMap = new Map(habitsForDate.map((h) => [h.id, h]));
+  const ac = useAccentColors();
 
   const sorted = [...strengthScores].sort((a, b) => b.score - a.score);
 
@@ -196,7 +199,7 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
           >
             <View style={[Cards.compact, {
               flexDirection: 'row', alignItems: 'center', gap: Spacing[3],
-              borderColor: rank <= 3 ? Colors.accentDim : Colors.border,
+              borderColor: rank <= 3 ? ac.accentDim : Colors.border,
             }]}>
               {/* Rank */}
               <View style={{ width: 28, alignItems: 'center' }}>
@@ -323,6 +326,7 @@ function MoodTab() {
 
 function PatternsTab() {
   const { failurePatterns, weekdayStats } = useAnalyticsStore();
+  const ac = useAccentColors();
 
   // Best and worst days
   const bestDay = weekdayStats.length > 0
@@ -380,7 +384,7 @@ function PatternsTab() {
               <View key={p.reason} style={{ flexDirection: 'row', gap: Spacing[3], alignItems: 'flex-start' }}>
                 <View style={{
                   width: 6, height: 6, borderRadius: 3,
-                  backgroundColor: Colors.accent, marginTop: 7,
+                  backgroundColor: ac.accent, marginTop: 7,
                 }} />
                 <Text style={[T.sm, { flex: 1, color: Colors.textSecondary, lineHeight: 20 }]}>{tip}</Text>
               </View>
@@ -397,6 +401,7 @@ function PatternsTab() {
 export default function InsightsScreen() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const router = useRouter();
+  const ac = useAccentColors();
 
   return (
     <SafeAreaView style={Layout.screen} edges={['top']}>
@@ -425,9 +430,9 @@ export default function InsightsScreen() {
                   flexDirection: 'row', alignItems: 'center', gap: Spacing[2],
                   paddingHorizontal: Spacing[3], paddingVertical: Spacing[2],
                   borderRadius: Radius.lg,
-                  backgroundColor: isActive ? Colors.accent : Colors.surfaceElevated,
+                  backgroundColor: isActive ? ac.accent : Colors.surfaceElevated,
                   borderWidth: 1,
-                  borderColor: isActive ? Colors.accent : Colors.border,
+                  borderColor: isActive ? ac.accent : Colors.border,
                 }}
               >
                 <Ionicons

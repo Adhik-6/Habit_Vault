@@ -6,6 +6,7 @@ import { Colors, Radius, Spacing } from '@design/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { shareExportCSV, pickAndImportBackup, shareBackupJSON } from '@services/exportService';
 import { useHabitStore } from '@store/useHabitStore';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 import { useRef, useState } from 'react';
 import { ManageCategoriesSheet } from '@src/components/habits/ManageCategoriesSheet';
 import { AccentColorSheet } from '@src/components/settings/AccentColorSheet';
@@ -72,6 +73,7 @@ export default function SettingsScreen() {
   const logs = useHabitStore((s) => s.todayLogsMap);
   const manageCategoriesRef = useRef<BottomSheetRef>(null);
   const accentColorRef = useRef<BottomSheetRef>(null);
+  const ac = useAccentColors();
 
   async function handleExportJSON() {
     setExportingJSON(true);
@@ -153,14 +155,14 @@ export default function SettingsScreen() {
             label="Manage Categories"
             description="Create or edit habit categories"
             onPress={() => manageCategoriesRef.current?.open()}
-            color={Colors.accent}
+            color={ac.accent}
           />
           <SettingRow
             icon="color-palette-outline"
             label="Accent Color"
-            description="Default color for uncategorized habits"
+            description="Change the app's theme accent color"
             onPress={() => accentColorRef.current?.open()}
-            color={Colors.accent}
+            color={ac.accent}
           />
           
           <Text style={[T.label, { marginBottom: Spacing[3], marginTop: Spacing[4] }]}>Data & Backup</Text>

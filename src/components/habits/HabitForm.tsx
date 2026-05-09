@@ -6,6 +6,7 @@ import { BottomSheet, type BottomSheetRef } from '@src/components/common/BottomS
 import type { CompositeStep, FrequencyRule, Habit, HabitType } from '@src/types';
 import { generateId } from '@src/utils/idUtils';
 import { useHabitStore } from '@store/useHabitStore';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 import * as Haptics from 'expo-haptics';
 import React, { useRef, useState } from 'react';
 import {
@@ -86,6 +87,7 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
 
     const loadHabits = useHabitStore((s) => s.loadHabits);
     const categories = useHabitStore((s) => s.categories);
+    const ac = useAccentColors();
 
     React.useImperativeHandle(ref, () => ({
       openCreate: () => {
@@ -137,10 +139,10 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
             ? { type: 'daily' }
             : { type: 'weekly', daysOfWeek: form.selectedDays };
 
-        // Color is derived from the selected category; fallback to default
+        // Color is derived from the selected category; fallback to the user's accent color
         const categoryColor = form.categoryId
-          ? (categories.find((c) => c.id === form.categoryId)?.color ?? '#6366F1')
-          : '#6366F1';
+          ? (categories.find((c) => c.id === form.categoryId)?.color ?? ac.accent)
+          : ac.accent;
 
         const payload = {
           name: form.name.trim(),
@@ -214,17 +216,17 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
                   onPress={() => update({ type: t.value })}
                   style={[Cards.compact, {
                     flexDirection: 'row', alignItems: 'center', gap: Spacing[2],
-                    borderColor: form.type === t.value ? Colors.accent : Colors.border,
-                    backgroundColor: form.type === t.value ? Colors.accentMuted : Colors.surface,
+                    borderColor: form.type === t.value ? ac.accent : Colors.border,
+                    backgroundColor: form.type === t.value ? ac.accentMuted : Colors.surface,
                     paddingVertical: Spacing[2], paddingHorizontal: Spacing[3],
                   }]}
                 >
                   <Ionicons
                     name={t.icon as any}
                     size={16}
-                    color={form.type === t.value ? Colors.accentGlow : Colors.textMuted}
+                    color={form.type === t.value ? ac.accentGlow : Colors.textMuted}
                   />
-                  <Text style={[T.sm, { color: form.type === t.value ? Colors.accentGlow : Colors.textSecondary }]}>
+                  <Text style={[T.sm, { color: form.type === t.value ? ac.accentGlow : Colors.textSecondary }]}>
                     {t.label}
                   </Text>
                 </TouchableOpacity>
@@ -287,8 +289,8 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
                   onSubmitEditing={addStep}
                   returnKeyType="done"
                 />
-                <TouchableOpacity onPress={addStep} style={[Buttons.icon, { backgroundColor: Colors.accentMuted, borderColor: Colors.accentDim }]}>
-                  <Ionicons name="add" size={20} color={Colors.accentGlow} />
+                <TouchableOpacity onPress={addStep} style={[Buttons.icon, { backgroundColor: ac.accentMuted, borderColor: ac.accentDim }]}>
+                  <Ionicons name="add" size={20} color={ac.accentGlow} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -304,11 +306,11 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
                   onPress={() => update({ frequencyType: ft })}
                   style={[Cards.compact, {
                     flex: 1, alignItems: 'center',
-                    borderColor: form.frequencyType === ft ? Colors.accent : Colors.border,
-                    backgroundColor: form.frequencyType === ft ? Colors.accentMuted : Colors.surface,
+                    borderColor: form.frequencyType === ft ? ac.accent : Colors.border,
+                    backgroundColor: form.frequencyType === ft ? ac.accentMuted : Colors.surface,
                   }]}
                 >
-                  <Text style={[T.sm, { color: form.frequencyType === ft ? Colors.accentGlow : Colors.textSecondary, textTransform: 'capitalize' }]}>
+                  <Text style={[T.sm, { color: form.frequencyType === ft ? ac.accentGlow : Colors.textSecondary, textTransform: 'capitalize' }]}>
                     {ft}
                   </Text>
                 </TouchableOpacity>
@@ -324,8 +326,8 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
                       onPress={() => toggleDay(i)}
                       style={{
                         width: 38, height: 38, borderRadius: 19,
-                        backgroundColor: active ? Colors.accent : Colors.surfaceElevated,
-                        borderWidth: 1, borderColor: active ? Colors.accent : Colors.border,
+                        backgroundColor: active ? ac.accent : Colors.surfaceElevated,
+                        borderWidth: 1, borderColor: active ? ac.accent : Colors.border,
                         alignItems: 'center', justifyContent: 'center',
                       }}
                     >
@@ -346,22 +348,22 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
                 <TouchableOpacity
                   onPress={() => update({ categoryId: null })}
                   style={[Cards.compact, {
-                    borderColor: form.categoryId === null ? Colors.accent : Colors.border,
-                    backgroundColor: form.categoryId === null ? Colors.accentMuted : Colors.surface,
+                    borderColor: form.categoryId === null ? ac.accent : Colors.border,
+                    backgroundColor: form.categoryId === null ? ac.accentMuted : Colors.surface,
                   }]}
                 >
-                  <Text style={[T.sm, { color: form.categoryId === null ? Colors.accentGlow : Colors.textMuted }]}>None</Text>
+                  <Text style={[T.sm, { color: form.categoryId === null ? ac.accentGlow : Colors.textMuted }]}>None</Text>
                 </TouchableOpacity>
                 {categories.map((c) => (
                   <TouchableOpacity
                     key={c.id}
                     onPress={() => update({ categoryId: c.id })}
                     style={[Cards.compact, {
-                      borderColor: form.categoryId === c.id ? Colors.accent : Colors.border,
-                      backgroundColor: form.categoryId === c.id ? Colors.accentMuted : Colors.surface,
+                      borderColor: form.categoryId === c.id ? ac.accent : Colors.border,
+                      backgroundColor: form.categoryId === c.id ? ac.accentMuted : Colors.surface,
                     }]}
                   >
-                    <Text style={[T.sm, { color: form.categoryId === c.id ? Colors.accentGlow : Colors.textSecondary }]}>{c.name}</Text>
+                    <Text style={[T.sm, { color: form.categoryId === c.id ? ac.accentGlow : Colors.textSecondary }]}>{c.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -372,7 +374,7 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
           <TouchableOpacity
             onPress={handleSave}
             disabled={saving}
-            style={[Buttons.primary, { opacity: saving ? 0.6 : 1 }]}
+            style={[Buttons.primary, { opacity: saving ? 0.6 : 1, backgroundColor: ac.accent }]}
           >
             <Ionicons name={editingId ? 'save-outline' : 'add-circle-outline'} size={18} color="#fff" />
             <Text style={[T.bodyMedium, { color: '#fff' }]}>

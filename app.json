@@ -2,18 +2,14 @@
   "expo": {
     "name": "Habit Vault",
     "slug": "habit-vault",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
-
     "icon": "./assets/images/app-icon.png",
-
     "scheme": "habittracker",
     "userInterfaceStyle": "dark",
-
     "ios": {
       "supportsTablet": true
     },
-
     "android": {
       "package": "com.am.habitvault",
       "adaptiveIcon": {
@@ -24,29 +20,24 @@
       "predictiveBackGestureEnabled": false,
       "permissions": []
     },
-
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
-
     "plugins": [
       "expo-router",
       "expo-sqlite",
       "expo-secure-store"
     ],
-
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-
     "extra": {
       "router": {},
       "eas": {

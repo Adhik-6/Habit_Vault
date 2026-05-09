@@ -1,4 +1,2 @@
 ## TODO
-1. When the accent color is changed, it must change the colors of the buttons, heatmap and other components in the app that seem to have a kind of blue color (indigo blue). This blue color seems to be the accent color of the app and when the user tries changing the accent color in the settings, the accent color of the app must also be changed.
-2. Credits to antigravity in README.md
-3. I created few habits. then i closed the app and reopened it. The habits are not appearing until i create a new habit, this was the case for the categories & moods and all other pages that has data. I think the problem is that the data is not being fetched from the local storage when the app is opened.
+1.
