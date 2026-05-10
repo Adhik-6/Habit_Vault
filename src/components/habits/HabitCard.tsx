@@ -28,6 +28,7 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
   const logQuantityHabit = useHabitStore((s) => s.logQuantityHabit);
   const logDurationHabit = useHabitStore((s) => s.logDurationHabit);
   const toggleCompositeStepAction = useHabitStore((s) => s.toggleCompositeStep);
+  const logCounterHabit = useHabitStore((s) => s.logCounterHabit);
 
   const habitColor = useHabitColor(habit.categoryId);
   const accentMuted = habitColor + '1A';
@@ -48,6 +49,7 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
   const pan = Gesture.Pan()
     .activeOffsetX([-10, 10])
     .onUpdate((e) => {
+      // Only boolean supports swipe-right-to-complete
       if (habit.type === 'boolean' && e.translationX > 0) {
         translateX.value = Math.min(100, e.translationX);
       }
@@ -77,6 +79,11 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
     const newVal = Math.max(0, current + delta);
     Haptics.selectionAsync();
     await logQuantityHabit(habit.id, newVal);
+  };
+
+  const handleCounterChange = async (delta: number) => {
+    Haptics.selectionAsync();
+    await logCounterHabit(habit.id, delta);
   };
 
   const handleCompositeStep = async (stepId: string) => {
@@ -160,16 +167,27 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
                 {habit.streak.current > 0 && (
                   <Text style={T.caption}>🔥 {habit.streak.current}d</Text>
                 )}
-                {(habit.type === 'quantity' || habit.type === 'duration') && (
+                {habit.type === 'quantity' && (
                   <Text style={T.caption}>
                     {habit.todayLog?.value ?? 0}{habit.unit ? ` ${habit.unit}` : ''}
                     {' / '}{habit.targetValue}{habit.unit ? ` ${habit.unit}` : ''}
+                  </Text>
+                )}
+                {habit.type === 'duration' && (
+                  <Text style={T.caption}>
+                    {Math.floor((habit.todayLog?.durationSeconds ?? habit.todayLog?.value ?? 0) / 60)} min
+                    {' / '}{habit.targetValue} min
                   </Text>
                 )}
                 {habit.type === 'composite' && (
                   <Text style={T.caption}>
                     {Object.values(habit.todayLog?.compositeProgress ?? {}).filter(Boolean).length}
                     /{habit.compositeSteps.length} steps
+                  </Text>
+                )}
+                {habit.type === 'counter' && (
+                  <Text style={T.caption}>
+                    {habit.todayLog?.value ?? 0} today
                   </Text>
                 )}
               </View>
@@ -189,6 +207,27 @@ export function HabitCard({ habit, onLongPress }: HabitCardProps) {
                 </Text>
                 <TouchableOpacity
                   onPress={() => handleQuantityChange(1)}
+                  style={[Buttons.icon, { width: 30, height: 30, borderRadius: 8, backgroundColor: accentMuted, borderColor: accentDim }]}
+                >
+                  <Ionicons name="add" size={14} color={accentGlow} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Counter stepper — no target, just accumulates */}
+            {habit.type === 'counter' && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2] }}>
+                <TouchableOpacity
+                  onPress={() => handleCounterChange(-1)}
+                  style={[Buttons.icon, { width: 30, height: 30, borderRadius: 8 }]}
+                >
+                  <Ionicons name="remove" size={14} color={Colors.textSecondary} />
+                </TouchableOpacity>
+                <Text style={[T.bodyMedium, { minWidth: 30, textAlign: 'center', color: habitColor }]}>
+                  {habit.todayLog?.value ?? 0}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleCounterChange(1)}
                   style={[Buttons.icon, { width: 30, height: 30, borderRadius: 8, backgroundColor: accentMuted, borderColor: accentDim }]}
                 >
                   <Ionicons name="add" size={14} color={accentGlow} />

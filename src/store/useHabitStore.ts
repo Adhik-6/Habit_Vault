@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { getHabits } from '../services/habitService';
-import { getLogsForDate, getLogsForHabit, logHabit, toggleBooleanHabit, toggleCompositeStep } from '../services/logService';
+import { getLogsForDate, getLogsForHabit, logHabit, toggleBooleanHabit, toggleCompositeStep, incrementCounter } from '../services/logService';
 import { getCategories } from '../services/categoryService';
 import type { Habit, HabitLog, Category, StreakData } from '../types';
 import { computeHabitStrengthScore, computeStreak } from '../utils/analytics';
@@ -34,6 +34,7 @@ interface HabitActions {
   logQuantityHabit: (habitId: string, value: number, notes?: string) => Promise<void>;
   logDurationHabit: (habitId: string, seconds: number) => Promise<void>;
   toggleCompositeStep: (habitId: string, stepId: string) => Promise<void>;
+  logCounterHabit: (habitId: string, delta: number) => Promise<void>;
 
   // ❌ REMOVED: getHabitsForSelectedDate, getStacksWithHabits, getUnstackedHabits
 }
@@ -140,6 +141,17 @@ export const useHabitStore = create<HabitStore>()(
       if (completedSteps >= totalSteps && !updated.completedAt) {
         updated.completedAt = new Date().toISOString();
       }
+      set((state) => {
+        const newMap = new Map(state.todayLogsMap);
+        newMap.set(habitId, updated);
+        return { todayLogsMap: newMap };
+      });
+      useAnalyticsStore.getState().recomputeAll();
+    },
+
+    logCounterHabit: async (habitId: string, delta: number) => {
+      const { selectedDate } = get();
+      const updated = await incrementCounter(habitId, delta, selectedDate);
       set((state) => {
         const newMap = new Map(state.todayLogsMap);
         newMap.set(habitId, updated);

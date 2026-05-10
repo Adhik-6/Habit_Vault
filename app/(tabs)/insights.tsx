@@ -68,7 +68,7 @@ function OverviewTab() {
     <View style={{ gap: Spacing[4] }}>
 
       {/* Global score hero card */}
-      <Animated.View entering={FadeInDown.delay(80).duration(350)} style={[Cards.accentBorder]}>
+      <Animated.View entering={FadeInDown.delay(80).duration(350)} style={[Cards.accentBorder, { borderColor: ac.accent }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[4] }}>
           <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
             <ProgressRing progress={globalScore / 100} size={80} strokeWidth={7} color={scoreColor} />
@@ -296,21 +296,35 @@ function MoodTab() {
       {/* Score distribution */}
       <Animated.View entering={FadeInDown.delay(240).duration(350)} style={[Cards.base]}>
         <Text style={[T.label, { marginBottom: Spacing[3] }]}>Score Distribution</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 60 }}>
-          {dist.map((d) => (
-            <View key={d.score} style={{ flex: 1, alignItems: 'center' }}>
-              <View style={{
-                width: '100%',
-                height: Math.max(3, (d.count / maxCount) * 48),
-                borderRadius: 3,
-                backgroundColor: d.count > 0 ? moodColor(d.score) : Colors.border,
-                opacity: d.count > 0 ? 0.85 : 0.3,
-              }} />
-              <Text style={[T.xs, { color: Colors.textDim, marginTop: 3, fontSize: 8 }]}>
-                {d.score}
-              </Text>
-            </View>
-          ))}
+        {/* Y-axis label */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
+          {/* Y-axis */}
+          <View style={{ width: 20, height: 72, justifyContent: 'space-between', alignItems: 'flex-end', paddingBottom: 16 }}>
+            <Text style={[T.xs, { color: Colors.textDim, fontSize: 8 }]}>{maxCount}</Text>
+            <Text style={[T.xs, { color: Colors.textDim, fontSize: 8 }]}>{Math.round(maxCount / 2)}</Text>
+            <Text style={[T.xs, { color: Colors.textDim, fontSize: 8 }]}>0</Text>
+          </View>
+          {/* Bars */}
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 72 }}>
+            {dist.map((d) => (
+              <View key={d.score} style={{ flex: 1, alignItems: 'center' }}>
+                {/* Count label above bar */}
+                <Text style={[T.xs, { color: Colors.textDim, fontSize: 8, marginBottom: 1 }]}>
+                  {d.count > 0 ? d.count : ''}
+                </Text>
+                <View style={{
+                  width: '100%',
+                  height: Math.max(3, (d.count / maxCount) * 48),
+                  borderRadius: 3,
+                  backgroundColor: d.count > 0 ? moodColor(d.score) : Colors.border,
+                  opacity: d.count > 0 ? 0.85 : 0.3,
+                }} />
+                <Text style={[T.xs, { color: Colors.textDim, marginTop: 3, fontSize: 8 }]}>
+                  {d.score}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
       </Animated.View>
 

@@ -196,6 +196,105 @@ export function buildDayIntensities(
   });
 }
 
+import type { Habit } from '../types';
+
+/**
+ * Builds a per-day intensity array for a SINGLE habit over the last 365 days.
+ * Intensity rules by type:
+ *   boolean   — 0 or 4 (binary)
+ *   quantity  — partial progress: value/targetValue → 0-4 tiers
+ *   duration  — durationSeconds/(targetValue*60) → 0-4 tiers
+ *   composite — completedSteps/totalSteps → 0-4 tiers
+ *   counter   — GitHub-style relative: max count in window = tier 4
+ */
+export function buildHabitDayIntensities(
+  logs: HabitLog[],
+  habit: Habit,
+): DayIntensity[] {
+  const dates = getLast365Days();
+  const logByDate = new Map<string, HabitLog>(logs.map((l) => [l.date, l]));
+
+  // For counter type: find max value in the window to normalise intensity
+  let counterMax = 1;
+  if (habit.type === 'counter') {
+    for (const log of logs) {
+      if (log.value > counterMax) counterMax = log.value;
+    }
+  }
+
+  return dates.map((date) => {
+    const log = logByDate.get(date);
+    let intensityTier: 0 | 1 | 2 | 3 | 4 = 0;
+    let completionRate = 0;
+    let rawValue = 0;
+    let compositeProgress: Record<string, boolean> | undefined;
+
+    if (!log) {
+      return { date, completedCount: 0, totalCount: 1, completionRate: 0, intensityTier: 0, moodScore: null, rawValue: 0 };
+    }
+
+    switch (habit.type) {
+      case 'boolean':
+        intensityTier = log.completedAt ? 4 : 0;
+        completionRate = log.completedAt ? 1 : 0;
+        rawValue = log.completedAt ? 1 : 0;
+        break;
+
+      case 'quantity': {
+        const target = habit.targetValue > 0 ? habit.targetValue : 1;
+        rawValue = log.value;
+        completionRate = Math.min(1, log.value / target);
+        intensityTier = toIntensityTier(completionRate);
+        break;
+      }
+
+      case 'duration': {
+        const targetSec = (habit.targetValue > 0 ? habit.targetValue : 1) * 60;
+        rawValue = log.durationSeconds;
+        completionRate = Math.min(1, log.durationSeconds / targetSec);
+        intensityTier = toIntensityTier(completionRate);
+        break;
+      }
+
+      case 'composite': {
+        const totalSteps = habit.compositeSteps.length || 1;
+        const completedSteps = Object.values(log.compositeProgress).filter(Boolean).length;
+        rawValue = completedSteps;
+        compositeProgress = log.compositeProgress;
+        completionRate = Math.min(1, completedSteps / totalSteps);
+        intensityTier = toIntensityTier(completionRate);
+        break;
+      }
+
+      case 'counter': {
+        // GitHub-style: normalise by max in the period
+        rawValue = log.value;
+        const pct = counterMax > 0 ? log.value / counterMax : 0;
+        completionRate = pct;
+        intensityTier = log.value === 0 ? 0
+          : pct <= 0.25 ? 1
+          : pct <= 0.5  ? 2
+          : pct <= 0.75 ? 3
+          : 4;
+        break;
+      }
+    }
+
+    return {
+      date,
+      completedCount: log.completedAt ? 1 : 0,
+      totalCount: 1,
+      completionRate,
+      intensityTier,
+      moodScore: null,
+      rawValue,
+      compositeProgress,
+    };
+  });
+}
+
+
+
 // ─────────────────────────────────────────────
 // WEEKDAY STATS
 // ─────────────────────────────────────────────

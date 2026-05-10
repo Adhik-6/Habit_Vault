@@ -7,9 +7,12 @@ import { createCategory, updateCategory, deleteCategory } from '@services/catego
 import { Colors, Spacing, Radius } from '@design/tokens';
 import { Cards, Inputs, Buttons, Text as T } from '@design/components';
 
+import { useAccentColors } from '@/hooks/use-accent-colors';
+
 export const ManageCategoriesSheet = React.forwardRef<BottomSheetRef, {}>((props, ref) => {
   const categories = useHabitStore((s) => s.categories);
   const loadHabits = useHabitStore((s) => s.loadHabits);
+  const ac = useAccentColors();
   
   const [isCreating, setIsCreating] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -78,7 +81,7 @@ export const ManageCategoriesSheet = React.forwardRef<BottomSheetRef, {}>((props
             )}
 
             <TouchableOpacity 
-              style={[Buttons.primary, { marginTop: Spacing[2] }]} 
+              style={[Buttons.primary, { marginTop: Spacing[2], backgroundColor: ac.accent }]} 
               onPress={() => setIsCreating(true)}
             >
               <Ionicons name="add" size={20} color="#fff" />
@@ -122,7 +125,7 @@ export const ManageCategoriesSheet = React.forwardRef<BottomSheetRef, {}>((props
               <TouchableOpacity style={[Buttons.secondary, { flex: 1 }]} onPress={resetForm}>
                 <Text style={[T.bodyMedium, { color: Colors.text }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[Buttons.primary, { flex: 1 }]} onPress={handleSave}>
+              <TouchableOpacity style={[Buttons.primary, { flex: 1, backgroundColor: ac.accent }]} onPress={handleSave}>
                 <Text style={[T.bodyMedium, { color: '#fff' }]}>Save</Text>
               </TouchableOpacity>
             </View>

@@ -71,6 +71,7 @@ export interface CreateHabitInput {
   categoryId?: string | null;
   compositeSteps?: Habit['compositeSteps'];
   sortOrder?: number;
+  createdAt?: string;
 }
 
 export async function createHabit(input: CreateHabitInput): Promise<Habit> {
@@ -87,7 +88,7 @@ export async function createHabit(input: CreateHabitInput): Promise<Habit> {
     icon: input.icon ?? 'star',
     categoryId: input.categoryId ?? null,
     compositeSteps: input.compositeSteps ?? [],
-    createdAt: new Date().toISOString(),
+    createdAt: input.createdAt ?? new Date().toISOString(),
     archivedAt: null,
     sortOrder: input.sortOrder ?? 0,
   };

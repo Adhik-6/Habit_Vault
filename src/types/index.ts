@@ -2,7 +2,7 @@
 // HABIT CORE TYPES
 // ─────────────────────────────────────────────
 
-export type HabitType = 'boolean' | 'quantity' | 'duration' | 'composite';
+export type HabitType = 'boolean' | 'quantity' | 'duration' | 'composite' | 'counter';
 export type FrequencyType = 'daily' | 'weekly' | 'custom';
 export type FailureReasonType = 'tired' | 'busy' | 'forgot' | 'lazy' | 'custom';
 
@@ -136,7 +136,12 @@ export interface DayIntensity {
   intensityTier: 0 | 1 | 2 | 3 | 4;
   completionRate: number; // 0-1
   moodScore: number | null;
+  /** Raw logged value (quantity count, duration seconds, counter count, etc.) */
+  rawValue?: number;
+  /** Composite step progress map for checklist habits */
+  compositeProgress?: Record<string, boolean>;
 }
+
 
 export interface HabitInsight {
   type: 'best_time' | 'worst_day' | 'streak_risk' | 'improving' | 'declining' | 'pattern';

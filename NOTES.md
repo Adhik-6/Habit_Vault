@@ -41,3 +41,7 @@ npx eas build -p ios --profile production --clear-cache
 2. `rm -rf app/.cxx app/build`
 3. `./gradlew clean`
 4. Finally `./gradlew assembleRelease`
+
+### A Note on Counter Heatmap Intensity
+- Regarding your note about the "Counter" heatmap not getting brighter: GitHub's actual contribution algorithm works by finding the highest activity recorded across the entire year, and grading every other day relative to that single maximum value.
+- If you only log activity on a single day (even if you click it 100 times), that day is technically the "max" value for the year, so it will correctly default to the absolute brightest tier (Tier 4). It will only start showing different colored tiers once you log activity on a second day and compare the two days against each other.

@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -86,7 +87,7 @@ export async function shareBackupJSON(encrypt = false, passphrase?: string): Pro
 
 // ── CSV Export ──────────────────────────────────────────────────────────────
 
-export async function exportToCSV(): Promise<string> {
+export async function exportToCSV(encrypt = false, passphrase?: string): Promise<string> {
   const data = await collectAllData();
 
   const headers = [
@@ -115,23 +116,30 @@ export async function exportToCSV(): Promise<string> {
   });
 
   const csv = [headers.join(','), ...rows].join('\r\n');
+  const BOM = '\uFEFF'; // Excel-friendly
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   await ensureBackupDir();
 
-  const csvFile = new File(BACKUP_DIR, `habitvault-logs-${timestamp}.csv`);
+  let content = BOM + csv;
+  let filename = `habitvault-logs-${timestamp}.csv`;
 
-  const BOM = '\uFEFF'; // Excel-friendly
-  await csvFile.write(BOM + csv);
+  if (encrypt && passphrase) {
+    content = await encryptData(csv, passphrase);
+    filename = `habitvault-logs-${timestamp}.enc.csv`;
+  }
+
+  const csvFile = new File(BACKUP_DIR, filename);
+  await csvFile.write(content);
 
   return csvFile.uri;
 }
 
-export async function shareExportCSV(): Promise<void> {
-  const fileUri = await exportToCSV();
+export async function shareExportCSV(encrypt = false, passphrase?: string): Promise<void> {
+  const fileUri = await exportToCSV(encrypt, passphrase);
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(fileUri, {
-      mimeType: 'text/csv',
+      mimeType: encrypt ? 'application/octet-stream' : 'text/csv',
       dialogTitle: 'Share Habit Logs CSV',
     });
   }
@@ -139,34 +147,101 @@ export async function shareExportCSV(): Promise<void> {
 
 // ── Import ──────────────────────────────────────────────────────────────────
 
-export async function pickAndImportBackup(passphrase?: string): Promise<BackupMeta> {
-  const result = await DocumentPicker.getDocumentAsync({
-    type: ['application/json', '*/*'],
-    copyToCacheDirectory: true,
-  });
-
-  if (result.canceled) throw new Error('Import cancelled');
-
-  const uri = result.assets[0].uri;
+export async function importBackupFromUri(uri: string, passphrase?: string): Promise<BackupMeta> {
   const raw = await new File(uri).text();
 
-  let jsonStr = raw;
-  // Detect encrypted backup
-  if (raw.trim().startsWith('"') || !raw.trim().startsWith('{')) {
-    if (!passphrase) throw new Error('This backup is encrypted. Please provide a passphrase.');
-    jsonStr = await decryptData(raw, passphrase);
+  let textStr = raw;
+  let isEncrypted = false;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.encrypted === true && typeof parsed.data === 'string') {
+      isEncrypted = true;
+    }
+  } catch (e) {
+    // Not valid JSON, might be raw CSV or corrupted
   }
 
-  const data: BackupData = JSON.parse(jsonStr);
-  await restoreFromBackup(data);
+  if (isEncrypted) {
+    if (!passphrase) throw new Error('This backup is encrypted. Please provide a passphrase.');
+    textStr = await decryptData(raw, passphrase);
+  }
 
-  return {
-    version: data.version,
-    exportedAt: data.exportedAt,
-    habitCount: data.habits.length,
-    logCount: data.habitLogs.length,
-    encrypted: jsonStr !== raw,
-  };
+  // Determine if JSON or CSV
+  const isJson = textStr.trim().startsWith('{');
+  
+  if (isJson) {
+    let data: BackupData;
+    try {
+      data = JSON.parse(textStr);
+      if (!data.habits || !data.habitLogs) {
+        throw new Error('Invalid backup data structure.');
+      }
+    } catch (e: any) {
+      throw new Error('Invalid backup file format.');
+    }
+    await restoreFromBackup(data);
+
+    return {
+      version: data.version,
+      exportedAt: data.exportedAt,
+      habitCount: data.habits.length,
+      logCount: data.habitLogs.length,
+      encrypted: isEncrypted,
+    };
+  } else {
+    // Try CSV
+    const rows = parseCSV(textStr);
+    if (rows.length === 0) {
+      throw new Error('Invalid backup file format. Expected a JSON or CSV backup.');
+    }
+    await restoreFromCSV(rows);
+    const habitIds = new Set(rows.map(r => r.habitId));
+    return {
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      habitCount: habitIds.size,
+      logCount: rows.length,
+      encrypted: isEncrypted,
+    };
+  }
+}
+
+function parseCSV(csvText: string): any[] {
+  const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+  if (lines.length < 2) return [];
+  // remove BOM if present
+  const headerLine = lines[0].replace(/^\uFEFF/, '');
+  const headers = headerLine.split(',').map(h => h.replace(/^"|"$/g, '').trim());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const rowStr = lines[i];
+    const values: string[] = [];
+    let curVal = '';
+    let inQuote = false;
+    for (let j = 0; j < rowStr.length; j++) {
+      const char = rowStr[j];
+      if (char === '"') {
+        inQuote = !inQuote;
+      } else if (char === ',' && !inQuote) {
+        values.push(curVal);
+        curVal = '';
+      } else {
+        curVal += char;
+      }
+    }
+    values.push(curVal);
+
+    const obj: any = {};
+    headers.forEach((h, idx) => {
+      let val = values[idx];
+      if (val === undefined) val = '';
+      val = val.replace(/^"|"$/g, '').replace(/""/g, '"').trim();
+      obj[h] = val === '' ? null : val;
+    });
+    rows.push(obj);
+  }
+  return rows;
 }
 
 async function restoreFromBackup(data: BackupData): Promise<void> {
@@ -225,72 +300,83 @@ async function restoreFromBackup(data: BackupData): Promise<void> {
   });
 }
 
-// ── Encryption (AES-GCM via WebCrypto / Hermes) ─────────────────────────────
+import { generateId } from '../utils/idUtils';
 
-async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey'],
-  );
-  // Slice to ensure we have a plain ArrayBuffer (not SharedArrayBuffer)
-  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: saltBuffer, iterations: 100_000, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
+async function restoreFromCSV(rows: any[]): Promise<void> {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    for (const r of rows) {
+      if (!r.habitId || !r.date) continue;
+      
+      // Ensure habit exists
+      const habitExists = await db.getFirstAsync('SELECT id FROM habits WHERE id = ?', [r.habitId]);
+      if (!habitExists) {
+        // Create stub habit
+        await db.runAsync(
+          `INSERT INTO habits (id, name, description, type, targetValue, unit, frequencyRules, color, icon, categoryId, compositeSteps, createdAt, archivedAt, sortOrder)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           [
+             r.habitId,
+             r.habitName || 'Imported Habit',
+             '',
+             r.type || 'boolean',
+             1,
+             '',
+             JSON.stringify({ type: 'daily' }),
+             '#6366F1',
+             'star',
+             null,
+             '[]',
+             new Date().toISOString(),
+             null,
+             0
+           ]
+        );
+      }
+
+      // Insert log
+      await db.runAsync(
+        `INSERT OR IGNORE INTO habit_logs (id, habitId, date, value, completedAt, durationSeconds, notes, moodRating, failureReason, failureCustomText, compositeProgress)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         [
+           generateId(),
+           r.habitId,
+           r.date,
+           parseFloat(r.value) || 0,
+           r.completedAt || null,
+           parseInt(r.durationSeconds) || 0,
+           r.notes || '',
+           r.moodRating ? parseInt(r.moodRating) : null,
+           r.failureReason || null,
+           '',
+           '{}'
+         ]
+      );
+    }
+  });
 }
 
+import CryptoJS from 'crypto-js';
+
+// ── Encryption (AES via crypto-js) ─────────────────────────────
+
 async function encryptData(plaintext: string, passphrase: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(passphrase, salt);
-  const enc = new TextEncoder();
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    enc.encode(plaintext),
-  );
-  // Pack: salt(16) + iv(12) + ciphertext → base64
-  const ciphertextBytes = new Uint8Array(ciphertext as ArrayBuffer);
-  const combined = new Uint8Array(salt.length + iv.length + ciphertextBytes.byteLength);
-  combined.set(salt, 0);
-  combined.set(iv, salt.length);
-  combined.set(ciphertextBytes, salt.length + iv.length);
-  return JSON.stringify({ encrypted: true, data: uint8ToBase64(combined) });
+  // CryptoJS handles salt and IV automatically when passing a string passphrase
+  const ciphertext = CryptoJS.AES.encrypt(plaintext, passphrase).toString();
+  return JSON.stringify({ encrypted: true, data: ciphertext });
 }
 
 async function decryptData(encryptedJson: string, passphrase: string): Promise<string> {
   const { data } = JSON.parse(encryptedJson);
-  const combined = base64ToUint8(data);
-  const salt = combined.slice(0, 16);
-  const iv = combined.slice(16, 28);
-  const ciphertext = combined.slice(28);
-  const key = await deriveKey(passphrase, salt);
-  const plainBuffer = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv.buffer.slice(iv.byteOffset, iv.byteOffset + iv.byteLength) as ArrayBuffer },
-    key,
-    ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength) as ArrayBuffer,
-  );
-  return new TextDecoder().decode(plainBuffer);
+  const bytes = CryptoJS.AES.decrypt(data, passphrase);
+  const plaintext = bytes.toString(CryptoJS.enc.Utf8);
+  if (!plaintext) {
+    throw new Error('Decryption failed. Incorrect passphrase or corrupted data.');
+  }
+  return plaintext;
 }
 
 // ── Utils ───────────────────────────────────────────────────────────────────
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  bytes.forEach((b) => (binary += String.fromCharCode(b)));
-  return btoa(binary);
-}
-
-function base64ToUint8(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
 
 async function ensureBackupDir(): Promise<void> {
   if (!BACKUP_DIR.exists) {

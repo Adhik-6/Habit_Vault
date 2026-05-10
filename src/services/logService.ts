@@ -200,3 +200,24 @@ export async function toggleCompositeStep(
     compositeProgress: progress,
   });
 }
+// ── Counter habit ────────────────────────────────────────────────────────────
+
+/** Increment a counter habit by `delta` (default +1). Negative values decrement. */
+export async function incrementCounter(
+  habitId: string,
+  delta: number = 1,
+  date: string = toDateString(),
+): Promise<HabitLog> {
+  const existing = await getLogForHabitOnDate(habitId, date);
+  const current = existing?.value ?? 0;
+  const newValue = Math.max(0, current + delta);
+
+  return logHabit({
+    habitId,
+    date,
+    value: newValue,
+    // Counter habits don't have a binary completed state —
+    // mark completedAt only when value > 0 so streak works
+    completedAt: newValue > 0 ? (existing?.completedAt ?? new Date().toISOString()) : null,
+  });
+}

@@ -13,12 +13,14 @@ import { Colors, Spacing } from '@design/tokens';
 import { archiveHabit, deleteHabit, getHabitById, unarchiveHabit } from '@services/habitService';
 import { HabitForm, type HabitFormRef } from '@src/components/habits/HabitForm';
 import type { HabitWithLog } from '@src/types';
+import { useAccentColors } from '@/hooks/use-accent-colors';
 
 export default function HabitDashboardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const habits = useHabitStore((s) => s.habits);
   const loadHabits = useHabitStore((s) => s.loadHabits);
+  const ac = useAccentColors();
   
   const formRef = useRef<HabitFormRef>(null);
 
@@ -120,7 +122,7 @@ export default function HabitDashboardScreen() {
         </TouchableOpacity>
         <Text style={[T.h3, { flex: 1 }]} numberOfLines={1}>Habit Dashboard</Text>
         <TouchableOpacity onPress={() => formRef.current?.openEdit(localHabit)} style={Buttons.icon}>
-          <Ionicons name="pencil" size={20} color={Colors.accent} />
+          <Ionicons name="pencil" size={20} color={ac.accent} />
         </TouchableOpacity>
       </View>
 

@@ -37,6 +37,7 @@ function CategorySection({ category, onLongPressHabit }: {
   onLongPressHabit: (h: HabitWithLog) => void;
 }) {
   const pct = category.totalCount > 0 ? category.completedCount / category.totalCount : 0;
+  const ac = useAccentColors();
 
   return (
     <View style={{ marginBottom: Spacing[5] }}>
@@ -68,7 +69,7 @@ function CategorySection({ category, onLongPressHabit }: {
 
       {/* Category complete banner — uses the category's own color, not accent */}
       {pct === 1 && category.totalCount > 0 && (
-        <Animated.View entering={ZoomIn.duration(300)} style={[Cards.accentBorder, { alignItems: 'center', paddingVertical: Spacing[3], flexDirection: 'row', justifyContent: 'center', gap: Spacing[2] }]}>
+        <Animated.View entering={ZoomIn.duration(300)} style={[Cards.accentBorder, { borderColor: category.color, shadowColor: category.color }, { alignItems: 'center', paddingVertical: Spacing[3], flexDirection: 'row', justifyContent: 'center', gap: Spacing[2] }]}>
           <Text style={{ fontSize: 20 }}>🎉</Text>
           <Text style={[T.bodyMedium, { color: category.color }]}>{category.name} complete!</Text>
         </Animated.View>
@@ -80,26 +81,31 @@ function CategorySection({ category, onLongPressHabit }: {
 // ── Mood Logger ───────────────────────────────────────────────────────────────
 const MOOD_SCORES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-function MoodLogger({ sheetRef }: { sheetRef: React.RefObject<BottomSheetRef> }) {
+function MoodLogger({ sheetRef, selectedDate }: {
+  sheetRef: React.RefObject<BottomSheetRef>;
+  selectedDate: string;
+}) {
   const logMood = useMoodStore((s) => s.logMood);
-  const todayMood = useMoodStore((s) => s.todayMood);
+  const moodByDate = useMoodStore((s) => s.moodByDate);
+  const moodForDate = moodByDate.get(selectedDate) ?? null;
+  const isToday = selectedDate === todayString();
 
   const handleMood = async (score: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await logMood({ score });
+    await logMood({ score, date: selectedDate });
     sheetRef.current?.close();
   };
 
   return (
     <View style={{ gap: Spacing[4], paddingBottom: Spacing[8] }}>
       <Text style={[T.body, { color: Colors.textSecondary, textAlign: 'center' }]}>
-        How are you feeling today?
+        {isToday ? 'How are you feeling today?' : `Mood for ${formatDisplayDate(selectedDate)}`}
       </Text>
-      {todayMood && (
+      {moodForDate && (
         <View style={[Cards.compact, { alignItems: 'center' }]}>
-          <Text style={{ fontSize: 28 }}>{moodEmoji(todayMood.score)}</Text>
+          <Text style={{ fontSize: 28 }}>{moodEmoji(moodForDate.score)}</Text>
           <Text style={[T.caption, { marginTop: Spacing[1] }]}>
-            Current mood: {todayMood.score}/10
+            {isToday ? 'Current' : 'Logged'} mood: {moodForDate.score}/10
           </Text>
         </View>
       )}
@@ -112,7 +118,7 @@ function MoodLogger({ sheetRef }: { sheetRef: React.RefObject<BottomSheetRef> })
               width: 54, height: 54, borderRadius: Radius.lg,
               backgroundColor: Colors.surfaceElevated,
               borderWidth: 2,
-              borderColor: todayMood?.score === score ? moodColor(score) : Colors.border,
+              borderColor: moodForDate?.score === score ? moodColor(score) : Colors.border,
               alignItems: 'center', justifyContent: 'center',
               gap: 2,
             }}
@@ -125,6 +131,7 @@ function MoodLogger({ sheetRef }: { sheetRef: React.RefObject<BottomSheetRef> })
     </View>
   );
 }
+
 
 // ── Context Menu (long press) ─────────────────────────────────────────────────
 function HabitContextMenu({
@@ -215,7 +222,9 @@ export default function TodayScreen() {
   const habitsForDate = useHabitsForSelectedDate();
   const categoriesWithHabits = useCategoriesWithHabits();
   const uncategorizedHabits = useUncategorizedHabits();
-  const todayMood = useMoodStore((s) => s.todayMood);
+  // Subscribe to the whole moodByDate map so we re-render on any mood change
+  const moodByDate = useMoodStore((s) => s.moodByDate);
+  const moodForDate = moodByDate.get(selectedDate) ?? null;
   const ac = useAccentColors();
 
   const completed = habitsForDate.filter((h) => h.isCompleted).length;
@@ -245,15 +254,14 @@ export default function TodayScreen() {
             {/* Mood button */}
             <TouchableOpacity
               onPress={() => moodSheetRef.current?.open()}
-              style={[Buttons.icon, { backgroundColor: todayMood ? ac.accentMuted : Colors.surfaceElevated, borderColor: todayMood ? ac.accentDim : Colors.border }]}
+              style={[Buttons.icon, { backgroundColor: moodForDate ? ac.accentMuted : Colors.surfaceElevated, borderColor: moodForDate ? ac.accentDim : Colors.border }]}
             >
               <Text style={{ fontSize: 18 }}>
-                {todayMood ? moodEmoji(todayMood.score) : '😐'}
+                {moodForDate ? moodEmoji(moodForDate.score) : '😐'}
               </Text>
             </TouchableOpacity>
-            {/* Add habit */}
             <TouchableOpacity
-              onPress={() => formRef.current?.openCreate()}
+              onPress={() => formRef.current?.openCreate(selectedDate)}
               style={[Buttons.icon, { marginLeft: Spacing[2], backgroundColor: ac.accentMuted, borderColor: ac.accentDim }]}
             >
               <Ionicons name="add" size={22} color={ac.accentGlow} />
@@ -311,8 +319,8 @@ export default function TodayScreen() {
                   Tap the + button to create your first habit and start building momentum.
                 </Text>
                 <TouchableOpacity
-                  onPress={() => formRef.current?.openCreate()}
-                  style={[Buttons.primary, { marginTop: Spacing[2] }]}
+                  onPress={() => formRef.current?.openCreate(selectedDate)}
+                  style={[Buttons.primary, { marginTop: Spacing[2], backgroundColor: ac.accent }]}
                 >
                   <Ionicons name="add-circle-outline" size={18} color="#fff" />
                   <Text style={[T.bodyMedium, { color: '#fff' }]}>Create First Habit</Text>
@@ -348,7 +356,7 @@ export default function TodayScreen() {
       {/* ── Sheets ── */}
       <HabitForm ref={formRef} />
       <BottomSheet ref={moodSheetRef} title="Daily Mood">
-        <MoodLogger sheetRef={moodSheetRef as React.RefObject<BottomSheetRef>} />
+        <MoodLogger sheetRef={moodSheetRef as React.RefObject<BottomSheetRef>} selectedDate={selectedDate} />
       </BottomSheet>
       <BottomSheet ref={contextSheetRef} title="Habit Options">
         <HabitContextMenu

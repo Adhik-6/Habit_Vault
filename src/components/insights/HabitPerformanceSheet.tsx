@@ -9,6 +9,7 @@ import { Colors, Spacing } from '@design/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet, type BottomSheetRef } from '@src/components/common/BottomSheet';
 import { ProgressRing } from '@src/components/common/ProgressRing';
+import { HabitHeatmap } from '@src/components/habits/HabitHeatmap';
 import type { HabitWithLog } from '@src/types';
 import { getLastNDays, getShortDayName } from '@src/utils/dateUtils';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
@@ -100,31 +101,13 @@ export function HabitDetail({ habit }: HabitDetailProps) {
         </Text>
       </View>
 
-      {/* 30-day mini calendar */}
+      {/* Full-year heatmap */}
       <View style={[Cards.compact]}>
-        <Text style={[T.label, { marginBottom: Spacing[3] }]}>Last 30 Days</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
-          {last30.map((date) => {
-            const completed = completedDates.has(date);
-            const isToday = date === last30[last30.length - 1];
-            return (
-              <View
-                key={date}
-                style={{
-                  width: 20, height: 20, borderRadius: 4,
-                  backgroundColor: completed
-                    ? habitColor
-                    : isToday ? ac.accentMuted : Colors.surfaceElevated,
-                  borderWidth: isToday ? 1.5 : 0,
-                  borderColor: ac.accent,
-                }}
-              />
-            );
-          })}
-        </View>
-        <Text style={[T.xs, { color: Colors.textDim, marginTop: Spacing[2] }]}>
-          Each cell = 1 day · filled = completed
-        </Text>
+        <Text style={[T.label, { marginBottom: Spacing[3] }]}>365-Day Activity</Text>
+        <HabitHeatmap
+          habit={habit}
+          habitColor={habitColor}
+        />
       </View>
 
       {/* Frequency info */}
@@ -135,10 +118,13 @@ export function HabitDetail({ habit }: HabitDetailProps) {
             {habit.frequencyRules.type === 'daily' ? 'Every day' :
               `Weekly on: ${(habit.frequencyRules.daysOfWeek ?? []).map((d) => getShortDayName(d)).join(', ')}`}
           </Text>
-          {habit.type !== 'boolean' && (
+          {(habit.type === 'quantity' || habit.type === 'duration') && (
             <Text style={T.caption}>
               Target: {habit.targetValue}{habit.unit ? ` ${habit.unit}` : ''}
             </Text>
+          )}
+          {habit.type === 'counter' && (
+            <Text style={T.caption}>Counter — no target (accumulates daily)</Text>
           )}
         </View>
       </View>

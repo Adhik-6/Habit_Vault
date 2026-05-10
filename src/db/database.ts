@@ -87,6 +87,14 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync('ALTER TABLE habits RENAME COLUMN stackId TO categoryId;');
     },
   },
+  {
+    version: 3,
+    up: async (_db) => {
+      // 'counter' habit type added — no schema change required.
+      // The `value` column in habit_logs already stores the running count.
+      // This migration is a marker so the version system stays in sync.
+    },
+  },
 ];
 
 async function _runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

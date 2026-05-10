@@ -1,5 +1,6 @@
 /**
  * WeekdayBarChart — SVG bar chart showing completion rate by weekday.
+ * LineChart — mood/completion trend with proper x/y axis labels.
  */
 import React from 'react';
 import { View, Text } from 'react-native';
@@ -54,10 +55,13 @@ function AnimatedBar({
 export function WeekdayBarChart({ data, height = 140, color, title }: BarChartProps) {
   const [chartWidth, setChartWidth] = React.useState<number | null>(null);
 
-  const padL = 8, padR = 8, padT = 12, padB = 28;
+  const padL = 32, padR = 8, padT = 12, padB = 28;
   const chartW = chartWidth ? chartWidth - padL - padR : 0;
   const chartH = height - padT - padB;
   const barW = chartW > 0 ? chartW / data.length - 6 : 0;
+
+  // Y-axis ticks at 0%, 50%, 100%
+  const yTicks = [0, 0.5, 1];
 
   return (
     <View style={[Cards.base, { marginBottom: Spacing[4] }]}>
@@ -65,49 +69,65 @@ export function WeekdayBarChart({ data, height = 140, color, title }: BarChartPr
       <View style={{ width: '100%' }} onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
         {chartWidth !== null && chartWidth > 0 && (
           <Svg width={chartWidth} height={height}>
-        {/* Baseline */}
-        <Line
-          x1={padL} y1={padT + chartH}
-          x2={padL + chartW} y2={padT + chartH}
-          stroke={Colors.border} strokeWidth={1}
-        />
+            {/* Y-axis ticks + labels */}
+            {yTicks.map((tick) => {
+              const yPos = padT + chartH - tick * chartH;
+              return (
+                <React.Fragment key={tick}>
+                  <Line
+                    x1={padL} y1={yPos}
+                    x2={padL + chartW} y2={yPos}
+                    stroke={Colors.border} strokeWidth={1}
+                    strokeDasharray={tick === 0 ? undefined : '3,3'}
+                  />
+                  <SvgText
+                    x={padL - 4} y={yPos + 4}
+                    textAnchor="end"
+                    fontSize={8}
+                    fill={Colors.textMuted}
+                  >
+                    {`${Math.round(tick * 100)}%`}
+                  </SvgText>
+                </React.Fragment>
+              );
+            })}
 
-        {data.map((d, i) => {
-          const x = padL + i * (chartW / data.length) + 3;
-          const barColor = d.completionRate > 0.7
-            ? Colors.success
-            : d.completionRate > 0.4
-            ? (color ?? Colors.accent)
-            : Colors.dangerDim;
+            {data.map((d, i) => {
+              const x = padL + i * (chartW / data.length) + 3;
+              const barColor = d.completionRate > 0.7
+                ? Colors.success
+                : d.completionRate > 0.4
+                ? (color ?? Colors.accent)
+                : Colors.dangerDim;
 
-          return (
-            <React.Fragment key={d.dayIndex}>
-              <AnimatedBar
-                x={x} w={barW}
-                maxH={chartH} y={padT + chartH}
-                rate={d.completionRate}
-                color={barColor}
-                delay={i * 80}
-              />
-              <SvgText
-                x={x + barW / 2} y={padT + chartH + 14}
-                textAnchor="middle"
-                fontSize={9}
-                fill={Colors.textMuted}
-              >
-                {DAY_LABELS[d.dayIndex].charAt(0)}
-              </SvgText>
-              <SvgText
-                x={x + barW / 2} y={padT + chartH - (d.completionRate * chartH) - 4}
-                textAnchor="middle"
-                fontSize={8}
-                fill={Colors.textMuted}
-              >
-                {d.totalAttempts > 0 ? `${Math.round(d.completionRate * 100)}` : ''}
-              </SvgText>
-            </React.Fragment>
-          );
-        })}
+              return (
+                <React.Fragment key={d.dayIndex}>
+                  <AnimatedBar
+                    x={x} w={barW}
+                    maxH={chartH} y={padT + chartH}
+                    rate={d.completionRate}
+                    color={barColor}
+                    delay={i * 80}
+                  />
+                  <SvgText
+                    x={x + barW / 2} y={padT + chartH + 14}
+                    textAnchor="middle"
+                    fontSize={9}
+                    fill={Colors.textMuted}
+                  >
+                    {DAY_LABELS[d.dayIndex].charAt(0)}
+                  </SvgText>
+                  <SvgText
+                    x={x + barW / 2} y={padT + chartH - (d.completionRate * chartH) - 4}
+                    textAnchor="middle"
+                    fontSize={8}
+                    fill={Colors.textMuted}
+                  >
+                    {d.totalAttempts > 0 ? `${Math.round(d.completionRate * 100)}` : ''}
+                  </SvgText>
+                </React.Fragment>
+              );
+            })}
           </Svg>
         )}
       </View>
@@ -129,15 +149,16 @@ interface LineChartProps {
   title?: string;
 }
 
-export function LineChart({ data, height = 120, color, min = 0, max = 10, title }: LineChartProps) {
+export function LineChart({ data, height = 140, color, min = 0, max = 10, title }: LineChartProps) {
   const [chartWidth, setChartWidth] = React.useState<number | null>(null);
 
   if (data.length < 2) return null;
 
-  const padL = 16, padR = 8, padT = 12, padB = 20;
+  // Left padding large enough for Y-axis labels ("10")
+  const padL = 28, padR = 8, padT = 12, padB = 24;
   const chartW = chartWidth ? chartWidth - padL - padR : 0;
   const chartH = height - padT - padB;
-  const range = max - min;
+  const range = max - min || 1;
 
   const points = chartW > 0 ? data.map((d, i) => ({
     x: padL + (i / (data.length - 1)) * chartW,
@@ -149,10 +170,19 @@ export function LineChart({ data, height = 120, color, min = 0, max = 10, title 
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
     .join(' ');
 
-  // Filled area path
-  const areaD = points.length > 0 ? `${pathD} L ${points[points.length - 1].x} ${padT + chartH} L ${points[0].x} ${padT + chartH} Z` : '';
+  const areaD = points.length > 0
+    ? `${pathD} L ${points[points.length - 1].x} ${padT + chartH} L ${points[0].x} ${padT + chartH} Z`
+    : '';
 
   const lineColor = color ?? Colors.accent;
+
+  // Y-axis ticks: 1, 3, 5, 7, 9 (or 4 evenly-spaced ticks)
+  const yTicks = Array.from({ length: 5 }, (_, i) => min + Math.round((i / 4) * (max - min)));
+
+  // X-axis: show every ~3rd label to avoid crowding
+  const step = Math.max(1, Math.floor(data.length / 5));
+  const xLabelIndices = new Set<number>([0, data.length - 1]);
+  for (let i = step; i < data.length - 1; i += step) xLabelIndices.add(i);
 
   return (
     <View style={[Cards.base, { marginBottom: Spacing[4] }]}>
@@ -160,25 +190,53 @@ export function LineChart({ data, height = 120, color, min = 0, max = 10, title 
       <View style={{ width: '100%' }} onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}>
         {chartWidth !== null && chartWidth > 0 && (
           <Svg width={chartWidth} height={height}>
-        {/* Area fill */}
-        <Path d={areaD} fill={lineColor} fillOpacity={0.08} />
-        {/* Line */}
-        <Path d={pathD} stroke={lineColor} strokeWidth={2} fill="none" strokeLinejoin="round" />
-        {/* Data points */}
-        {points.map((p, i) => (
-          <Circle key={i} cx={p.x} cy={p.y} r={3} fill={lineColor} />
-        ))}
-        {/* Labels on first/last */}
-        {data.length > 0 && (
-          <>
-            <SvgText x={points[0].x} y={padT + chartH + 14} textAnchor="middle" fontSize={9} fill={Colors.textMuted}>
-              {data[0].label ?? ''}
-            </SvgText>
-            <SvgText x={points[points.length - 1].x} y={padT + chartH + 14} textAnchor="middle" fontSize={9} fill={Colors.textMuted}>
-              {data[data.length - 1].label ?? ''}
-            </SvgText>
-            </>
-          )}
+            {/* Y-axis gridlines + labels */}
+            {yTicks.map((tick) => {
+              const yPos = padT + chartH - ((tick - min) / range) * chartH;
+              return (
+                <React.Fragment key={tick}>
+                  <Line
+                    x1={padL} y1={yPos}
+                    x2={padL + chartW} y2={yPos}
+                    stroke={Colors.border} strokeWidth={1}
+                    strokeDasharray={tick === min ? undefined : '3,3'}
+                  />
+                  <SvgText
+                    x={padL - 4} y={yPos + 4}
+                    textAnchor="end"
+                    fontSize={8}
+                    fill={Colors.textMuted}
+                  >
+                    {tick}
+                  </SvgText>
+                </React.Fragment>
+              );
+            })}
+
+            {/* Area fill */}
+            <Path d={areaD} fill={lineColor} fillOpacity={0.08} />
+            {/* Line */}
+            <Path d={pathD} stroke={lineColor} strokeWidth={2} fill="none" strokeLinejoin="round" />
+            {/* Data points */}
+            {points.map((p, i) => (
+              <Circle key={i} cx={p.x} cy={p.y} r={3} fill={lineColor} />
+            ))}
+            {/* X-axis labels (every ~nth) */}
+            {data.map((d, i) => {
+              if (!xLabelIndices.has(i)) return null;
+              return (
+                <SvgText
+                  key={i}
+                  x={points[i].x}
+                  y={padT + chartH + 16}
+                  textAnchor="middle"
+                  fontSize={8}
+                  fill={Colors.textMuted}
+                >
+                  {d.label ?? ''}
+                </SvgText>
+              );
+            })}
           </Svg>
         )}
       </View>

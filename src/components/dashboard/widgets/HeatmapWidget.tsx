@@ -121,6 +121,7 @@ interface HeatmapWidgetProps {
 export function HeatmapWidget({ habitId }: HeatmapWidgetProps) {
   const dayIntensities = useAnalyticsStore((s) => s.dayIntensities);
   const [selectedDay, setSelectedDay] = useState<DayIntensity | null>(null);
+  const scrollRef = React.useRef<ScrollView>(null);
   const ac = useAccentColors();
   const TIER_COLORS = ac.heatmapTiers;
 
@@ -161,33 +162,41 @@ export function HeatmapWidget({ habitId }: HeatmapWidgetProps) {
       </View>
 
       {/* Month labels + grid container */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View>
-          {/* Month labels (Positioned absolutely above the grid) */}
-          <View style={{ flexDirection: 'row', marginBottom: 4, height: 14, position: 'relative', marginLeft: 16 /* Add margin to account for the width of the day labels */ }}>
-            {monthLabels.map((m) => (
-              <Text
-                key={`${m.col}-${m.label}`}
-                style={[T.xs, {
-                  color: Colors.textMuted,
-                  position: 'absolute',
-                  left: m.col * (CELL + GAP),
-                  fontSize: 9,
-                }]}
-              >
-                {m.label}
-              </Text>
-            ))}
-          </View>
+      <View style={{ flexDirection: 'row' }}>
+        {/* Fixed day-of-week labels */}
+        <View style={{ flexDirection: 'column', gap: GAP, marginRight: 6, marginTop: 18, justifyContent: 'space-between' }}>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+            <Text key={i} style={[T.xs, { color: Colors.textDim, fontSize: 8, height: CELL, lineHeight: CELL }]}>
+              {i % 2 === 1 ? d : ''}
+            </Text>
+          ))}
+        </View>
 
-          {/* ✅ FIX: Wrap the Day Labels and the Grid in a Row */}
-          <View style={{ flexDirection: 'row' }}>
-
-            {/* Day-of-week labels (Moved BEFORE the grid) */}
-            <View style={{ flexDirection: 'column', gap: GAP, marginRight: 6, justifyContent: 'space-between' }}>
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                <Text key={i} style={[T.xs, { color: Colors.textDim, fontSize: 8, height: CELL, lineHeight: CELL }]}>
-                  {i % 2 === 1 ? d : ''}
+        {/* Scrollable grid */}
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          onLayout={() => {
+            setTimeout(() => {
+              scrollRef.current?.scrollToEnd({ animated: false });
+            }, 50);
+          }}
+        >
+          <View>
+            {/* Month labels (Positioned absolutely above the grid) */}
+            <View style={{ flexDirection: 'row', marginBottom: 4, height: 14, position: 'relative' }}>
+              {monthLabels.map((m) => (
+                <Text
+                  key={`${m.col}-${m.label}`}
+                  style={[T.xs, {
+                    color: Colors.textMuted,
+                    position: 'absolute',
+                    left: m.col * (CELL + GAP),
+                    fontSize: 9,
+                  }]}
+                >
+                  {m.label}
                 </Text>
               ))}
             </View>
@@ -217,10 +226,9 @@ export function HeatmapWidget({ habitId }: HeatmapWidgetProps) {
                 </View>
               ))}
             </View>
-
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
 
       {/* Day detail modal */}
       {selectedDay && (

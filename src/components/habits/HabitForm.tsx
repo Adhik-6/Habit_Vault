@@ -17,11 +17,12 @@ import {
 
 
 // ── Type option ───────────────────────────────────────────────────────────────
-const TYPES: { value: HabitType; label: string; icon: string }[] = [
-  { value: 'boolean', label: 'Done/Not Done', icon: 'checkmark-circle-outline' },
-  { value: 'quantity', label: 'Measurable', icon: 'bar-chart-outline' },
-  { value: 'duration', label: 'Duration', icon: 'timer-outline' },
-  { value: 'composite', label: 'Checklist', icon: 'list-outline' },
+const TYPES: { value: HabitType; label: string; icon: string; hint: string }[] = [
+  { value: 'boolean', label: 'Done/Not Done', icon: 'checkmark-circle-outline', hint: 'Simple yes/no completion' },
+  { value: 'quantity', label: 'Measurable', icon: 'bar-chart-outline', hint: 'Track a quantity with a target' },
+  { value: 'duration', label: 'Duration', icon: 'timer-outline', hint: 'Track time spent on a habit' },
+  { value: 'composite', label: 'Checklist', icon: 'list-outline', hint: 'Multiple steps to complete' },
+  { value: 'counter', label: 'Counter', icon: 'add-circle-outline', hint: 'Count anything — no target needed' },
 ];
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -68,7 +69,7 @@ function habitToForm(habit: Habit): FormState {
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 export interface HabitFormRef {
-  openCreate: () => void;
+  openCreate: (initialDate?: string) => void;
   openEdit: (habit: Habit) => void;
 }
 
@@ -82,6 +83,7 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
     const sheetRef = useRef<BottomSheetRef>(null);
     const [form, setForm] = useState<FormState>(defaultForm());
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [createDate, setCreateDate] = useState<string | null>(null);
     const [newStepText, setNewStepText] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -90,9 +92,10 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
     const ac = useAccentColors();
 
     React.useImperativeHandle(ref, () => ({
-      openCreate: () => {
+      openCreate: (initialDate?: string) => {
         setForm(defaultForm());
         setEditingId(null);
+        setCreateDate(initialDate ?? null);
         sheetRef.current?.open();
       },
       openEdit: (habit: Habit) => {
@@ -144,7 +147,7 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
           ? (categories.find((c) => c.id === form.categoryId)?.color ?? ac.accent)
           : ac.accent;
 
-        const payload = {
+        const payload: any = {
           name: form.name.trim(),
           description: form.description.trim(),
           type: form.type,
@@ -159,6 +162,13 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
         if (editingId) {
           await updateHabit(editingId, payload);
         } else {
+          if (createDate) {
+            // Keep current time but change the date
+            const now = new Date();
+            const [y, m, d] = createDate.split('-');
+            now.setFullYear(parseInt(y), parseInt(m) - 1, parseInt(d));
+            payload.createdAt = now.toISOString();
+          }
           await createHabit(payload);
         }
 
@@ -232,9 +242,13 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
                 </TouchableOpacity>
               ))}
             </View>
+            {/* Hint for selected type */}
+            <Text style={[T.caption, { marginTop: Spacing[1], color: Colors.textDim }]}>
+              {TYPES.find((t) => t.value === form.type)?.hint ?? ''}
+            </Text>
           </View>
 
-          {/* Target value + unit (quantity / duration) */}
+          {/* Target value + unit (quantity / duration only — counter has no target) */}
           {(form.type === 'quantity' || form.type === 'duration') && (
             <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
               <View style={{ flex: 1 }}>
@@ -370,11 +384,19 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
             </View>
           )}
 
-          {/* Save button */}
           <TouchableOpacity
             onPress={handleSave}
             disabled={saving}
-            style={[Buttons.primary, { opacity: saving ? 0.6 : 1, backgroundColor: ac.accent }]}
+            style={[
+              Buttons.primary,
+              { 
+                opacity: saving ? 0.6 : 1, 
+                backgroundColor: ac.accent,
+                shadowColor: 'transparent',
+                shadowOpacity: 0,
+                elevation: 0,
+              }
+            ]}
           >
             <Ionicons name={editingId ? 'save-outline' : 'add-circle-outline'} size={18} color="#fff" />
             <Text style={[T.bodyMedium, { color: '#fff' }]}>
