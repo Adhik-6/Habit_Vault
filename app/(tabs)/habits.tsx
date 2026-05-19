@@ -10,11 +10,24 @@ import { Colors, Spacing } from '@design/tokens';
 import { useHabitStore } from '@store/useHabitStore';
 import { getHabits } from '@services/habitService';
 import type { Habit } from '@src/types';
+import { useAnalyticsStore } from '@store/useAnalyticsStore';
 
 export default function HabitsScreen() {
   const router = useRouter();
   const habits = useHabitStore((s) => s.habits);
   const categories = useHabitStore((s) => s.categories);
+  const strengthScores = useAnalyticsStore((s) => s.strengthScores);
+
+  const sortedGlobal = [...strengthScores].sort((a, b) => b.score - a.score);
+  
+  const getRank = (habitId: string) => {
+    const idx = sortedGlobal.findIndex(s => s.habitId === habitId);
+    return idx === -1 ? '-' : idx + 1;
+  };
+
+  const getScore = (habitId: string) => {
+    return strengthScores.find(s => s.habitId === habitId)?.score ?? 0;
+  };
   
   const [showArchived, setShowArchived] = React.useState(false);
   const [archivedHabits, setArchivedHabits] = React.useState<Habit[]>([]);
@@ -32,19 +45,22 @@ export default function HabitsScreen() {
 
   const categorized = categories.map((c) => ({
     category: c,
-    habits: activeHabits.filter((h) => h.categoryId === c.id),
+    habits: activeHabits.filter((h) => h.categoryId === c.id).sort((a, b) => getScore(b.id) - getScore(a.id)),
   })).filter((group) => group.habits.length > 0);
 
-  const uncategorized = activeHabits.filter((h) => h.categoryId === null);
+  const uncategorized = activeHabits.filter((h) => h.categoryId === null).sort((a, b) => getScore(b.id) - getScore(a.id));
 
-  const renderHabitRow = (habit: Habit) => (
+  const renderHabitRow = (habit: Habit, categoryColor?: string) => {
+    const color = categoryColor || habit.color;
+    const rank = getRank(habit.id);
+    return (
     <TouchableOpacity
       key={habit.id}
       onPress={() => router.push(`/habit/${habit.id}` as any)}
       style={[Cards.compact, { flexDirection: 'row', alignItems: 'center', gap: Spacing[3], marginBottom: Spacing[2] }]}
     >
-      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: habit.color + '22', alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={habit.icon as any} size={18} color={habit.color} />
+      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: color }}>
+        <Text style={[T.smMedium, { color: color }]}>{rank}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={T.bodyMedium}>{habit.name}</Text>
@@ -54,7 +70,8 @@ export default function HabitsScreen() {
       </View>
       <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={Layout.screen} edges={['top']}>
@@ -93,7 +110,7 @@ export default function HabitsScreen() {
                   <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: group.category.color, marginRight: Spacing[2] }} />
                   <Text style={T.h3}>{group.category.name}</Text>
                 </View>
-                {group.habits.map(renderHabitRow)}
+                {group.habits.map((h) => renderHabitRow(h, group.category.color))}
               </Animated.View>
             ))}
 
@@ -102,7 +119,7 @@ export default function HabitsScreen() {
                 {categorized.length > 0 && (
                   <Text style={[T.label, { marginBottom: Spacing[3], marginTop: Spacing[4] }]}>Other Habits</Text>
                 )}
-                {uncategorized.map(renderHabitRow)}
+                {uncategorized.map((h) => renderHabitRow(h))}
               </Animated.View>
             )}
           </>

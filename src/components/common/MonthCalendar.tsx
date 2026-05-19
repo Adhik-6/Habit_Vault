@@ -30,16 +30,7 @@ export function MonthCalendar() {
       setViewDate(new Date(year, month - 1, 1));
     }
   }
-  function nextMonth() {
-    if (isCollapsed) {
-      setSelectedDate(new Date(new Date(selectedDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-    } else {
-      setViewDate(new Date(year, month + 1, 1));
-    }
-  }
-
   // Week view dates: based on selectedDate
-  const weekDates = getMonthDates(year, month).slice(0, 7); // placeholder, will calculate actual week
   const weekStart = new Date(selectedDate);
   const dow = weekStart.getDay();
   weekStart.setDate(weekStart.getDate() - dow);
@@ -53,6 +44,17 @@ export function MonthCalendar() {
   });
 
   const displayedDates = isCollapsed ? currentWeekDates : monthDates;
+
+  const disableNext = isCollapsed && currentWeekDates.includes(today);
+
+  function nextMonth() {
+    if (disableNext) return;
+    if (isCollapsed) {
+      setSelectedDate(new Date(new Date(selectedDate).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    } else {
+      setViewDate(new Date(year, month + 1, 1));
+    }
+  }
 
   return (
     <View style={[Cards.base, { marginBottom: Spacing[4] }]}>
@@ -71,7 +73,7 @@ export function MonthCalendar() {
           <Ionicons name={isCollapsed ? "chevron-down" : "chevron-up"} size={16} color={Colors.textSecondary} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={nextMonth} style={{ padding: Spacing[2] }}>
+        <TouchableOpacity onPress={nextMonth} disabled={disableNext} style={{ padding: Spacing[2], opacity: disableNext ? 0.3 : 1 }}>
           <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
         </TouchableOpacity>
       </View>

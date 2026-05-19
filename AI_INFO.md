@@ -73,9 +73,11 @@ We use **Zustand** combined with SQLite. The state management loop is strict:
 The application utilizes `react-native-svg` for robust data visualization (`LineChart`, `WeekdayBarChart`).
 - **Responsive Widths:** SVGs in React Native cannot accept string percentages (e.g., `width="100%"`). Instead, wrap the SVG in a `<View>` and use the `onLayout` prop to capture the dynamic container width. Store this numeric width in local state and pass it into the chart component.
 
-## 8. Exporting Data
+## 8. Exporting Data & Notifications
 
-The app features a `exportDataToCSV` function in `src/services/exportService.ts`. It queries the SQLite DB, formats all habits and logs into a massive string, writes it to `expo-file-system`'s `documentDirectory`, and triggers the native OS Share Sheet via `expo-sharing`.
+**Exports:** The app features a robust `exportService.ts`. It can generate both encrypted (AES-256) and unencrypted JSON and CSV backups. It uses `crypto-js` for encryption, writes to `expo-file-system`, and triggers the native OS Share Sheet via `expo-sharing`. Note that CSV backups now include category and habit fields to ensure comprehensive restoration.
+
+**Notifications:** We use `expo-notifications` for daily reminders. The settings state (enabled toggle and reminder time) is persisted via `@react-native-async-storage/async-storage`. Notifications are scheduled as local, repeating daily calendar triggers.
 
 ## 9. Common Troubleshooting
 

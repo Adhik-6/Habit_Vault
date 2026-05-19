@@ -108,7 +108,8 @@ Building sustainable habits requires a system that is both engaging and friction
   - 30-Day "Strength Score".
   - Mood vs. Habit completion trend line charts.
 - **Offline First:** 100% local data storage ensuring instantaneous speed and total privacy.
-- **Data Portability:** Export your entire history to a CSV file natively via your OS Share Sheet.
+- **Daily Reminders:** Set custom local notifications to remind you to log your mood and habits.
+- **Data Portability:** Export and import your entire history via JSON or CSV, secured with AES-256 encryption.
 
 <!-- Getting Started -->
 ## 	:toolbox: Getting Started
@@ -175,10 +176,10 @@ HabitVault is designed to be highly intuitive:
 - [x] Initial SQLite architecture and core CRUD operations.
 - [x] Complex Analytics (Heatmaps, Streaks, Strength Scores).
 - [x] Category Grouping & Navigation Overhaul.
-- [x] CSV Export via Native Share Sheets.
+- [x] CSV & JSON Export/Import with AES-256 Encryption.
+- [x] Habit Reminders & Notifications.
 - [ ] Cross-device synchronization (Optional Cloud Sync).
 - [ ] Lock-screen Widgets (iOS/Android).
-- [ ] Habit Reminders & Notifications.
 
 See the [open issues](https://github.com/Adhik-6/Habit_Vault/issues) for a full list of proposed features (and known issues).
 

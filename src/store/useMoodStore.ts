@@ -1,7 +1,7 @@
 // --- useMoodStore.ts ---
 
 import { create } from 'zustand';
-import { logMood as dbLogMood, getMoodLogs, type LogMoodInput } from '../services/moodService';
+import { logMood as dbLogMood, getMoodLogs, deleteMoodLog as dbDeleteMoodLog, type LogMoodInput } from '../services/moodService';
 import type { MoodLog } from '../types';
 import { toDateString } from '../utils/dateUtils';
 
@@ -21,6 +21,7 @@ interface MoodActions {
   // We can keep these two because they return simple values/references, not computed structures
   getTodayMood: () => MoodLog | null;
   getMoodForDate: (date: string) => MoodLog | null;
+  deleteMood: (date: string) => Promise<void>;
 
   // ❌ REMOVED: getMoodTimeline and getMoodScoreMap
 }
@@ -61,6 +62,19 @@ export const useMoodStore = create<MoodStore>()((set, get) => ({
       };
     });
     return moodLog;
+  },
+
+  deleteMood: async (date: string) => {
+    await dbDeleteMoodLog(date);
+    set((state) => {
+      const newMap = new Map(state.moodByDate);
+      newMap.delete(date);
+      const today = toDateString();
+      return {
+        moodByDate: newMap,
+        todayMood: date === today ? null : state.todayMood,
+      };
+    });
   },
 
   getTodayMood: () => get().todayMood,

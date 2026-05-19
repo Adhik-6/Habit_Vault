@@ -10,6 +10,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { BottomSheet, type BottomSheetRef } from '@src/components/common/BottomSheet';
 import { ManageCategoriesSheet } from '@src/components/habits/ManageCategoriesSheet';
 import { AccentColorSheet } from '@src/components/settings/AccentColorSheet';
+import { NotificationSettingsSheet, type NotificationSettingsSheetRef } from '@src/components/settings/NotificationSettingsSheet';
 import { useHabitStore } from '@store/useHabitStore';
 import React, { useRef, useState } from 'react';
 import {
@@ -224,6 +225,7 @@ export default function SettingsScreen() {
   const logs = useHabitStore((s) => s.todayLogsMap);
   const manageCategoriesRef = useRef<BottomSheetRef>(null);
   const accentColorRef = useRef<BottomSheetRef>(null);
+  const notificationsRef = useRef<NotificationSettingsSheetRef>(null);
   const ac = useAccentColors();
 
   // ── Export JSON ───────────────────────────────────────────────────────────
@@ -374,7 +376,7 @@ export default function SettingsScreen() {
             </View>
             <View style={{ width: 1, height: 40, backgroundColor: Colors.border }} />
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={T.scoreSm}>v1.1</Text>
+              <Text style={T.scoreSm}>v1.2</Text>
               <Text style={T.caption}>Version</Text>
             </View>
           </View>
@@ -395,6 +397,13 @@ export default function SettingsScreen() {
             label="Accent Color"
             description="Change the app's theme accent color"
             onPress={() => accentColorRef.current?.open()}
+            color={ac.accent}
+          />
+          <SettingRow
+            icon="notifications-outline"
+            label="Notifications"
+            description="Reminders for habits and mood"
+            onPress={() => notificationsRef.current?.open()}
             color={ac.accent}
           />
 
@@ -431,6 +440,10 @@ export default function SettingsScreen() {
         {/* ── FAQ ── */}
         <Animated.View entering={FadeInDown.delay(240).duration(350)}>
           <Text style={[T.label, { marginBottom: Spacing[3] }]}>Frequently Asked Questions</Text>
+          <FaqItem 
+            question="What is Global Strength?" 
+            answer="Global Strength (0-100) is a holistic metric of your overall behavioral performance. It aggregates the individual habit strength of all your habits and factors in your mood score to give you a quick read on how well you're doing right now."
+          />
           <FaqItem 
             question="How is Habit Strength calculated?" 
             answer="Habit Strength (0-100) measures your consistency over time. It looks at your completion rate and penalizes high variance. It effectively measures how reliably you stick to your habits week over week."
@@ -492,6 +505,7 @@ export default function SettingsScreen() {
       </ScrollView>
       <ManageCategoriesSheet ref={manageCategoriesRef} />
       <AccentColorSheet ref={accentColorRef} />
+      <NotificationSettingsSheet ref={notificationsRef} />
 
       {/* Cross-platform passphrase modal */}
       <PassphraseModal

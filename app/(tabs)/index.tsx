@@ -86,13 +86,18 @@ function MoodLogger({ sheetRef, selectedDate }: {
   selectedDate: string;
 }) {
   const logMood = useMoodStore((s) => s.logMood);
+  const deleteMood = useMoodStore((s) => s.deleteMood);
   const moodByDate = useMoodStore((s) => s.moodByDate);
   const moodForDate = moodByDate.get(selectedDate) ?? null;
   const isToday = selectedDate === todayString();
 
   const handleMood = async (score: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await logMood({ score, date: selectedDate });
+    if (moodForDate?.score === score) {
+      await deleteMood(selectedDate);
+    } else {
+      await logMood({ score, date: selectedDate });
+    }
     sheetRef.current?.close();
   };
 

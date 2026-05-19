@@ -93,13 +93,15 @@ export async function exportToCSV(encrypt = false, passphrase?: string): Promise
   const headers = [
     'date', 'habitId', 'habitName', 'type', 'value',
     'completedAt', 'durationSeconds', 'notes',
-    'moodRating', 'failureReason'
+    'moodRating', 'failureReason', 'categoryId', 'categoryName', 'categoryColor', 'habitColor'
   ];
 
   const habitMap = new Map(data.habits.map((h) => [h.id, h]));
+  const categoryMap = new Map(data.categories.map((c) => [c.id, c]));
 
   const rows = data.habitLogs.map((log) => {
     const habit = habitMap.get(log.habitId);
+    const category = habit?.categoryId ? categoryMap.get(habit.categoryId) : null;
 
     return [
       escapeCSV(log.date),
@@ -112,6 +114,10 @@ export async function exportToCSV(encrypt = false, passphrase?: string): Promise
       escapeCSV(log.notes),
       escapeCSV(log.moodRating),
       escapeCSV(log.failureReason),
+      escapeCSV(category?.id),
+      escapeCSV(category?.name),
+      escapeCSV(category?.color),
+      escapeCSV(habit?.color),
     ].join(',');
   });
 
@@ -301,6 +307,7 @@ async function restoreFromBackup(data: BackupData): Promise<void> {
 }
 
 import { generateId } from '../utils/idUtils';
+import { scoreToEmoji } from './moodService';
 
 async function restoreFromCSV(rows: any[]): Promise<void> {
   const db = await getDb();
@@ -308,6 +315,14 @@ async function restoreFromCSV(rows: any[]): Promise<void> {
     for (const r of rows) {
       if (!r.habitId || !r.date) continue;
       
+      // Handle category if provided
+      if (r.categoryId) {
+        await db.runAsync(
+          'INSERT OR IGNORE INTO categories (id, name, icon, color, sortOrder, createdAt) VALUES (?,?,?,?,?,?)',
+          [r.categoryId, r.categoryName || 'Imported Category', 'folder', r.categoryColor || '#888888', 0, new Date().toISOString()]
+        );
+      }
+
       // Ensure habit exists
       const habitExists = await db.getFirstAsync('SELECT id FROM habits WHERE id = ?', [r.habitId]);
       if (!habitExists) {
@@ -323,9 +338,9 @@ async function restoreFromCSV(rows: any[]): Promise<void> {
              1,
              '',
              JSON.stringify({ type: 'daily' }),
-             '#6366F1',
+             r.habitColor || '#6366F1',
              'star',
-             null,
+             r.categoryId || null,
              '[]',
              new Date().toISOString(),
              null,
@@ -352,6 +367,17 @@ async function restoreFromCSV(rows: any[]): Promise<void> {
            '{}'
          ]
       );
+
+      // Restore mood if present
+      if (r.moodRating) {
+        const score = parseInt(r.moodRating);
+        if (!isNaN(score)) {
+           await db.runAsync(
+             'INSERT OR IGNORE INTO mood_logs (id, date, score, emoji, notes, createdAt) VALUES (?,?,?,?,?,?)',
+             [generateId(), r.date, score, scoreToEmoji(score), '', new Date().toISOString()]
+           );
+        }
+      }
     }
   });
 }

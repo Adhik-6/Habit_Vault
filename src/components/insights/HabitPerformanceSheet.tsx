@@ -53,6 +53,55 @@ export function HabitDetail({ habit }: HabitDetailProps) {
 
   const completedDates = new Set(historyLogs.filter(l => l.completedAt !== null).map(l => l.date));
 
+  // Analytics for quantity, duration, counter
+  let highestValue = 0;
+  let totalValue = 0;
+  let logCount = 0;
+
+  // Analytics for composite
+  const stepCompletions: Record<string, number> = {};
+  let totalStepsCompleted = 0;
+  let compositeLogCount = 0;
+
+  historyLogs.forEach(l => {
+    if (habit.type === 'quantity' || habit.type === 'duration' || habit.type === 'counter') {
+      if (l.value > highestValue) highestValue = l.value;
+      totalValue += l.value;
+      if (l.value > 0) logCount++;
+    } else if (habit.type === 'composite') {
+      let dailySteps = 0;
+      if (l.compositeProgress) {
+        Object.entries(l.compositeProgress).forEach(([stepId, completed]) => {
+          if (completed) {
+            stepCompletions[stepId] = (stepCompletions[stepId] || 0) + 1;
+            dailySteps++;
+            totalStepsCompleted++;
+          }
+        });
+      }
+      if (dailySteps > 0) compositeLogCount++;
+    }
+  });
+
+  const averageValue = logCount > 0 ? (totalValue / logCount).toFixed(1) : '0';
+
+  let highestValueDisplay = highestValue.toString();
+  let averageValueDisplay = averageValue;
+  let statUnit = habit.unit;
+
+  if (habit.type === 'duration') {
+    highestValueDisplay = (highestValue / 60).toFixed(0);
+    averageValueDisplay = (parseFloat(averageValue) / 60).toFixed(0);
+    statUnit = 'min';
+  }
+
+  const averageSteps = compositeLogCount > 0 ? (totalStepsCompleted / compositeLogCount).toFixed(1) : '0';
+
+  const rankedSteps = habit.type === 'composite' ? habit.compositeSteps.map(step => ({
+    ...step,
+    completedTimes: stepCompletions[step.id] || 0
+  })).sort((a, b) => b.completedTimes - a.completedTimes) : [];
+
   return (
     <View style={{ gap: Spacing[4], paddingBottom: Spacing[6] }}>
       {/* Header */}
@@ -69,13 +118,13 @@ export function HabitDetail({ habit }: HabitDetailProps) {
       {/* Key metrics */}
       <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
         {[
-          { label: 'Strength', value: score?.score ?? 0, unit: '/100', color: ac.accent },
+          { label: 'Strength', value: score?.score ?? 0, unit: '/100', color: habitColor },
           { label: 'Streak', value: streak?.current ?? 0, unit: 'd', color: Colors.warning },
           { label: 'Best', value: streak?.longest ?? 0, unit: 'd', color: Colors.success },
           { label: 'Rate', value: Math.round(completionRate * 100), unit: '%', color: Colors.info },
         ].map((m) => (
-          <View key={m.label} style={[Cards.compact, { flex: 1, alignItems: 'center', paddingVertical: Spacing[2] }]}>
-            <Text style={[T.scoreSm, { color: m.color }]}>{m.value}<Text style={[T.xs, { color: Colors.textMuted }]}>{m.unit}</Text></Text>
+          <View key={m.label} style={[Cards.compact, { flex: 1, alignItems: 'center', paddingVertical: Spacing[2], paddingHorizontal: Spacing[1] }]}>
+            <Text style={[T.scoreSm, { color: m.color }]} numberOfLines={1} adjustsFontSizeToFit>{m.value}<Text style={[T.xs, { color: Colors.textMuted }]}>{m.unit}</Text></Text>
             <Text style={T.xs}>{m.label}</Text>
           </View>
         ))}
@@ -128,6 +177,72 @@ export function HabitDetail({ habit }: HabitDetailProps) {
           )}
         </View>
       </View>
+
+      {/* Values & Checklist Stats */}
+      {(habit.type === 'quantity' || habit.type === 'duration' || habit.type === 'counter') && logCount > 0 && (
+        <View style={{ gap: Spacing[3] }}>
+          <Text style={T.label}>Performance Stats</Text>
+          <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
+            <View style={[Cards.compact, { flex: 1, alignItems: 'center', paddingVertical: Spacing[4] }]}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing[2] }}>
+                <Ionicons name="trophy-outline" size={20} color={Colors.warning} />
+              </View>
+              <Text style={T.sm}>Highest Record</Text>
+              <Text style={[T.h2, { color: ac.accent, marginTop: Spacing[1] }]}>
+                {highestValueDisplay}
+                <Text style={[T.sm, { color: Colors.textMuted }]}> {statUnit}</Text>
+              </Text>
+            </View>
+            <View style={[Cards.compact, { flex: 1, alignItems: 'center', paddingVertical: Spacing[4] }]}>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing[2] }}>
+                <Ionicons name="stats-chart-outline" size={20} color={Colors.info} />
+              </View>
+              <Text style={T.sm}>Average</Text>
+              <Text style={[T.h2, { color: ac.accent, marginTop: Spacing[1] }]}>
+                {averageValueDisplay}
+                <Text style={[T.sm, { color: Colors.textMuted }]}> {statUnit}</Text>
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {habit.type === 'composite' && rankedSteps.length > 0 && (
+        <View style={{ gap: Spacing[3] }}>
+          <Text style={T.label}>Checklist Stats</Text>
+          
+          <View style={[Cards.compact, { flexDirection: 'row', alignItems: 'center', padding: Spacing[4], gap: Spacing[4] }]}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="checkmark-done-circle-outline" size={28} color={ac.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={T.sm}>Average items completed</Text>
+              <Text style={[T.h2, { color: ac.accent, marginTop: 2 }]}>
+                {averageSteps}
+                <Text style={[T.sm, { color: Colors.textMuted }]}> items</Text>
+              </Text>
+            </View>
+          </View>
+
+          <View style={[Cards.compact, { padding: Spacing[4] }]}>
+            <Text style={[T.label, { marginBottom: Spacing[3] }]}>Sub-habits Ranking</Text>
+            <View style={{ gap: Spacing[3] }}>
+              {rankedSteps.map((step, index) => (
+                <View key={step.id} style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[3] }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: index === 0 ? Colors.warningDim : Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={[T.smMedium, { color: index === 0 ? Colors.warning : Colors.textMuted }]}>{index + 1}</Text>
+                  </View>
+                  <Text style={[T.bodyMedium, { flex: 1 }]} numberOfLines={1}>{step.title}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[1] }}>
+                    <Text style={[T.smMedium, { color: ac.accent }]}>{step.completedTimes}</Text>
+                    <Text style={T.xs}>times</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Streak milestone progress */}
       {streak && (
