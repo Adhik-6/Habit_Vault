@@ -350,3 +350,8 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+## Others
+
+apk_builds/
+*.apk

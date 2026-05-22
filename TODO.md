@@ -96,3 +96,4 @@ Structure your final output as follows:
 ## Final
 1. Update the `README.md` and `AI_INFO.md` accoding to the new featuers added.
 2. Verify if the follwoing has been done - Make sure the mood data, category data & the habits under the category is also backed up along the category's chosen color.
+3. Change the names of app assets to have '_' and also their occurences.

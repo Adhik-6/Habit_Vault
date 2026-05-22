@@ -1,12 +1,49 @@
 ## Commands
 1. `npm start` - Start the development server
 2. `npx expo start -c` - Start the development server with cache clearing
-3. `npx expo install eas-cli` - Install EAS CLI for building and submitting apps
-4. `npx eas build:configure` - Configure EAS build for the project
-5. `npx eas build -p android --profile production --clear-cache` - Build the Android app for production with cache clearing
-6. `npx eas build -p ios --profile production --clear-cache` - Build the iOS app for production with cache clearing
-7. `npx eas submit -p android --latest` - Take the latest build from EAS and upload it to the Google Play Store.
-8. `npx expo install <package-name>` - Install a specific package using Expo's package manager (use this instead of `npm install` for Expo packages)
+3. `npm install -g eas-cli` - Install EAS CLI for building and submitting apps
+4. `eas login` - Log in to your Expo account through the CLI
+5. `npx eas build:configure` - Configure EAS build for the project
+6. `npx eas build -p android --profile production --clear-cache` - Build the Android app for production with cache clearing
+7. `npx eas build -p ios --profile production --clear-cache` - Build the iOS app for production with cache clearing
+8. `npx eas submit -p android --latest` - Take the latest build from EAS and upload it to the Google Play Store.
+9. `npx expo install <package-name>` - Install a specific package using Expo's package manager (use this instead of `npm install` for Expo packages)
+10. `npx expo run:android` - Run the app on an Android emulator or connected device
+
+
+### Generating the APK using eas
+1. `npm install -g eas-cli` - Install EAS CLI globally if you haven't already.
+2. `eas login` - Log in to your Expo account through the CLI.
+3. `npx eas build:configure` - Configure EAS build for the project (only needed the first time).
+4. Open the generated eas.json and tell it to output an APK file instead of an AAB:
+```json
+{
+  "cli": {
+    "version": ">= 10.2.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+```
+5. `npx eas build -p android --profile production --clear-cache` - Build the Android app for production with cache clearing. This will generate an APK file due to the configuration in eas.json.
+6. Once the build is complete, you can download the APK from the EAS build dashboard.
 
 ### Full Reset Script
 ```bash
@@ -18,7 +55,7 @@ rm -rf .expo
 rm -rf package-lock.json
 npm install
 npx expo prebuild --clean
-npx eas build -p ios --profile production --clear-cache
+npx eas build -p android --profile production --clear-cache
 ```
 
 ### Workflow
