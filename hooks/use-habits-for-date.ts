@@ -3,6 +3,7 @@
 import { filterHabitsForDate } from '@/src/services/habitService';
 import { useHabitStore } from '@/src/store/useHabitStore';
 import { useAnalyticsStore } from '@/src/store/useAnalyticsStore';
+import { getCompletionWeight } from '@/src/utils/analytics';
 import type { HabitWithLog, CategoryWithHabits } from '@/src/types';
 import { useMemo } from 'react';
 
@@ -19,10 +20,18 @@ export function useHabitsForSelectedDate(): HabitWithLog[] {
         return scheduled.map((h): HabitWithLog => {
             const log = todayLogsMap.get(h.id) ?? null;
             const scoreObj = strengthScores.find(s => s.habitId === h.id);
+            const weight = getCompletionWeight(h, log);
+            
+            let isCompleted = !!log?.completedAt;
+            if (h.type === 'composite') {
+                isCompleted = h.isBadHabit ? weight === 0 : weight === 1;
+            }
             return {
                 ...h,
                 todayLog: log,
-                isCompleted: !!log?.completedAt,
+                isCompleted,
+                completionWeight: weight,
+                contributesToProgress: weight === 1,
                 streak: scoreObj?.streak ?? { current: 0, longest: 0, lastCompletedDate: null },
                 strengthScore: scoreObj?.score ?? 0,
             };
@@ -37,7 +46,7 @@ export function useCategoriesWithHabits(): CategoryWithHabits[] {
     return useMemo(() => {
         return categories.map((c): CategoryWithHabits => {
             const categoryHabits = habitsForDate.filter((h) => h.categoryId === c.id);
-            const completed = categoryHabits.filter((h) => h.isCompleted).length;
+            const completed = categoryHabits.reduce((sum, h) => sum + h.completionWeight, 0);
             return {
                 ...c,
                 habits: categoryHabits,

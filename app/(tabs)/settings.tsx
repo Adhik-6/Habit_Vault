@@ -2,122 +2,38 @@
  * Settings Screen — Export / Import / Preferences.
  */
 import { useAccentColors } from '@/hooks/use-accent-colors';
-import { Cards, Divider, Layout, Text as T } from '@design/components';
+import { Cards, Divider, Layout, Text as T, Inputs, Buttons } from '@design/components';
 import { Colors, Radius, Spacing } from '@design/tokens';
 import { Ionicons } from '@expo/vector-icons';
-import { importBackupFromUri, shareBackupJSON, shareExportCSV } from '@services/exportService';
-import * as DocumentPicker from 'expo-document-picker';
-import { BottomSheet, type BottomSheetRef } from '@src/components/common/BottomSheet';
+import { clearAllData, generateSampleData } from '@services/devData';
+import { importBackupFromUri, shareBackupJSON } from '@services/exportService';
+import { type BottomSheetRef } from '@src/components/common/BottomSheet';
 import { ManageCategoriesSheet } from '@src/components/habits/ManageCategoriesSheet';
 import { AccentColorSheet } from '@src/components/settings/AccentColorSheet';
+import { AuthModal } from '@src/components/settings/AuthModal';
 import { NotificationSettingsSheet, type NotificationSettingsSheetRef } from '@src/components/settings/NotificationSettingsSheet';
+import { SetPasswordSheet } from '@src/components/settings/SetPasswordSheet';
+import { useAuthStore } from '@store/useAuthStore';
 import { useHabitStore } from '@store/useHabitStore';
+import * as DocumentPicker from 'expo-document-picker';
+import Constants from 'expo-constants';
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform,
-  Pressable, ScrollView, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator, Alert,
+  ScrollView, Text,
+  TouchableOpacity, View, Modal, TextInput, NativeSyntheticEvent, TextInputSubmitEditingEventData
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// ── Cross-platform passphrase modal ──────────────────────────────────────────
-
-type PassphraseAction = 'export-json' | 'export-csv' | 'import' | null;
-
-interface PassphraseModalProps {
-  visible: boolean;
-  title: string;
-  subtitle: string;
-  confirmLabel?: string;
-  onConfirm: (passphrase: string) => void;
-  onCancel: () => void;
-}
-
-function PassphraseModal({ visible, title, subtitle, confirmLabel = 'Confirm', onConfirm, onCancel }: PassphraseModalProps) {
-  const [value, setValue] = useState('');
-  const [show, setShow] = useState(false);
-
-  const handleConfirm = () => {
-    if (!value.trim()) {
-      Alert.alert('Required', 'Please enter a passphrase.');
-      return;
-    }
-    const v = value.trim();
-    setValue('');
-    onConfirm(v);
-  };
-
-  const handleCancel = () => { setValue(''); onCancel(); };
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}
-          onPress={handleCancel}
-        >
-          <Pressable
-            style={{
-              backgroundColor: Colors.surface, borderRadius: Radius.lg,
-              padding: Spacing[5], width: 300,
-              borderWidth: 1, borderColor: Colors.border, gap: Spacing[3],
-            }}
-            onPress={() => {}}
-          >
-            <Text style={[T.h3, { textAlign: 'center' }]}>{title}</Text>
-            <Text style={[T.caption, { textAlign: 'center', color: Colors.textSecondary }]}>{subtitle}</Text>
-            <View style={{
-              flexDirection: 'row', alignItems: 'center',
-              backgroundColor: Colors.surfaceElevated, borderRadius: Radius.md,
-              borderWidth: 1, borderColor: Colors.border,
-              paddingHorizontal: Spacing[3], gap: Spacing[2],
-            }}>
-              <Ionicons name="lock-closed-outline" size={16} color={Colors.textMuted} />
-              <TextInput
-                style={[T.body as any, { flex: 1, color: Colors.text, paddingVertical: Spacing[3] }]}
-                value={value}
-                onChangeText={setValue}
-                placeholder="Enter passphrase…"
-                placeholderTextColor={Colors.textDim}
-                secureTextEntry={!show}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={handleConfirm}
-              />
-              <TouchableOpacity onPress={() => setShow((v) => !v)} hitSlop={8}>
-                <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={16} color={Colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ flexDirection: 'row', gap: Spacing[2] }}>
-              <TouchableOpacity
-                onPress={handleCancel}
-                style={{ flex: 1, alignItems: 'center', paddingVertical: Spacing[3], borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border }}
-              >
-                <Text style={T.sm}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleConfirm}
-                style={{ flex: 1, alignItems: 'center', paddingVertical: Spacing[3], borderRadius: Radius.md, backgroundColor: Colors.accent }}
-              >
-                <Text style={[T.sm, { color: '#fff', fontWeight: '600' }]}>{confirmLabel}</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
+  useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
-  withTiming,
-  useAnimatedStyle,
-  withSpring,
+  withTiming
 } from 'react-native-reanimated';
 
 function AnimatedHeart() {
@@ -215,11 +131,11 @@ function FaqItem({ question, answer }: { question: string, answer: string }) {
 
 export default function SettingsScreen() {
   const [exportingJSON, setExportingJSON] = useState(false);
-  const [exportingCSV, setExportingCSV] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importUri, setImportUri] = useState<string | null>(null);
   // Cross-platform passphrase modal state
-  const [passphraseAction, setPassphraseAction] = useState<PassphraseAction>(null);
+  const [passphraseAction, setPassphraseAction] = useState<'export-json' | 'import' | null>(null);
+  const [showPassphrase, setShowPassphrase] = useState(false);
   const loadHabits = useHabitStore((s) => s.loadHabits);
   const habits = useHabitStore((s) => s.habits);
   const logs = useHabitStore((s) => s.todayLogsMap);
@@ -229,9 +145,9 @@ export default function SettingsScreen() {
   const ac = useAccentColors();
 
   // ── Export JSON ───────────────────────────────────────────────────────────
-  async function handleExportJSON() {
+  function handleExportJSON() {
     Alert.alert(
-      'Export JSON Backup',
+      'Export Backup',
       'Do you want to encrypt this backup with a passphrase?\n\nEncrypted backups use AES-256 and require the same passphrase to restore.',
       [
         {
@@ -253,36 +169,25 @@ export default function SettingsScreen() {
     );
   }
 
-  // ── Export CSV ────────────────────────────────────────────────────────────
-  async function handleExportCSV() {
-    Alert.alert(
-      'Export CSV',
-      'Do you want to encrypt this CSV backup?',
-      [
-        {
-          text: 'Export Plain',
-          onPress: async () => {
-            setExportingCSV(true);
-            try { await shareExportCSV(); }
-            catch (e: any) { Alert.alert('Export Failed', e.message); }
-            finally { setExportingCSV(false); }
-          },
-        },
-        {
-          text: 'Encrypt…',
-          onPress: () => setPassphraseAction('export-csv'),
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
-  }
+  const passwordRef = useRef<BottomSheetRef>(null);
+
+  // Auth interceptor
+  const [pendingAuthAction, setPendingAuthAction] = useState<{ action: () => void } | null>(null);
+  const executeWithAuth = (action: () => void) => {
+    if (useAuthStore.getState().passwordHash) {
+      setPendingAuthAction({ action });
+    } else {
+      action();
+    }
+  };
+
 
   // ── Import ────────────────────────────────────────────────────────────────
   async function handleImport() {
     setImporting(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/json', 'text/csv', '*/*'],
+        type: ['application/json', '*/*'],
         copyToCacheDirectory: true,
       });
 
@@ -290,7 +195,7 @@ export default function SettingsScreen() {
         setImporting(false);
         return;
       }
-      
+
       const uri = result.assets[0].uri;
       setImportUri(uri);
 
@@ -325,11 +230,6 @@ export default function SettingsScreen() {
       try { await shareBackupJSON(true, passphrase); }
       catch (e: any) { Alert.alert('Export Failed', e.message); }
       finally { setExportingJSON(false); }
-    } else if (action === 'export-csv') {
-      setExportingCSV(true);
-      try { await shareExportCSV(true, passphrase); }
-      catch (e: any) { Alert.alert('Export Failed', e.message); }
-      finally { setExportingCSV(false); }
     } else if (action === 'import') {
       if (!importUri) return;
       setImporting(true);
@@ -352,6 +252,44 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={Layout.screen} edges={['top']}>
+      {passphraseAction && (
+        <Modal transparent animationType="fade">
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: Spacing[5] }}>
+            <View style={[Cards.base, { backgroundColor: Colors.surface, padding: Spacing[5] }]}>
+              <Text style={[T.h3, { marginBottom: Spacing[2] }]}>
+                {passphraseAction === 'export-json' ? 'Set Backup Passphrase' : 'Enter Backup Passphrase'}
+              </Text>
+              <Text style={[T.caption, { marginBottom: Spacing[4] }]}>
+                {passphraseAction === 'export-json' 
+                  ? 'This passphrase will be used to encrypt your backup. Do not lose it.' 
+                  : 'This backup is encrypted. Enter the passphrase to decrypt it.'}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing[4] }}>
+                <TextInput
+                  style={[Inputs.base, { flex: 1, paddingRight: 40 }]}
+                  placeholder="Passphrase"
+                  placeholderTextColor={Colors.textMuted}
+                  secureTextEntry={!showPassphrase}
+                  autoFocus
+                  onSubmitEditing={(e: NativeSyntheticEvent<TextInputSubmitEditingEventData>) => {
+                    handlePassphraseConfirm(e.nativeEvent.text);
+                    setShowPassphrase(false);
+                  }}
+                />
+                <TouchableOpacity onPress={() => setShowPassphrase(!showPassphrase)} style={{ position: 'absolute', right: Spacing[3] }}>
+                  <Ionicons name={showPassphrase ? 'eye-off' : 'eye'} size={20} color={Colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <View style={{ flexDirection: 'row', gap: Spacing[3], justifyContent: 'flex-end' }}>
+                <TouchableOpacity onPress={() => { setPassphraseAction(null); setShowPassphrase(false); }} style={[Buttons.secondary, { paddingHorizontal: Spacing[4], paddingVertical: Spacing[2] }]}>
+                  <Text style={[T.smMedium, { color: Colors.textSecondary }]}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
       <ScrollView
         contentContainerStyle={{ padding: Spacing[5], paddingBottom: Spacing[24] }}
         showsVerticalScrollIndicator={false}
@@ -376,7 +314,7 @@ export default function SettingsScreen() {
             </View>
             <View style={{ width: 1, height: 40, backgroundColor: Colors.border }} />
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={T.scoreSm}>v1.2</Text>
+              <Text style={T.scoreSm}>v3.0</Text>
               <Text style={T.caption}>Version</Text>
             </View>
           </View>
@@ -410,20 +348,19 @@ export default function SettingsScreen() {
           <Text style={[T.label, { marginBottom: Spacing[3], marginTop: Spacing[4] }]}>Data & Backup</Text>
 
           <SettingRow
+            icon="lock-closed-outline"
+            label="App Password"
+            description="Protect your data with a password"
+            color={Colors.warning}
+            onPress={() => passwordRef.current?.open()}
+          />
+          <SettingRow
             icon="share-outline"
             label="Export JSON Backup"
             description="Full backup with AES-256 encryption option"
-            onPress={handleExportJSON}
+            onPress={() => executeWithAuth(handleExportJSON)}
             loading={exportingJSON}
             color={Colors.accent}
-          />
-          <SettingRow
-            icon="document-text-outline"
-            label="Export CSV"
-            description="Habit logs as spreadsheet"
-            onPress={handleExportCSV}
-            loading={exportingCSV}
-            color={Colors.info}
           />
           <SettingRow
             icon="cloud-download-outline"
@@ -440,25 +377,37 @@ export default function SettingsScreen() {
         {/* ── FAQ ── */}
         <Animated.View entering={FadeInDown.delay(240).duration(350)}>
           <Text style={[T.label, { marginBottom: Spacing[3] }]}>Frequently Asked Questions</Text>
-          <FaqItem 
-            question="What is Global Strength?" 
+          <FaqItem
+            question="What is Global Strength?"
             answer="Global Strength (0-100) is a holistic metric of your overall behavioral performance. It aggregates the individual habit strength of all your habits and factors in your mood score to give you a quick read on how well you're doing right now."
           />
-          <FaqItem 
-            question="How is Habit Strength calculated?" 
+          <FaqItem
+            question="How is Habit Strength calculated?"
             answer="Habit Strength (0-100) measures your consistency over time. It looks at your completion rate and penalizes high variance. It effectively measures how reliably you stick to your habits week over week."
           />
-          <FaqItem 
-            question="How does the intensity heatmap work?" 
+          <FaqItem
+            question="How does the intensity heatmap work?"
             answer="The heatmap varies by habit type. Boolean habits show as solid colors. Duration, Quantity, and Checklist habits show intensity based on progress towards your daily target. For Counter habits, intensity is calculated relative to your all-time maximum on any single day, similar to GitHub's contribution graph."
           />
-          <FaqItem 
-            question="Are my backups secure?" 
+          <FaqItem
+            question="Are my backups secure?"
             answer="Yes! When you encrypt your backups, HabitVault uses AES-256 encryption before generating the file. The key is never stored, and only you can decrypt the backup using your exact passphrase."
           />
-          <FaqItem 
-            question="Where is my data stored?" 
+          <FaqItem
+            question="Where is my data stored?"
             answer="HabitVault is completely offline-first. Your data is stored directly on your device using a local SQLite database and is never sent to the cloud unless you manually share a backup."
+          />
+          <FaqItem
+            question="What is a Bad Habit?"
+            answer="Bad habits are behaviors you want to avoid. The goal is to NOT do them. If you fail and engage in the bad habit, you log it. If you successfully avoid it, you do not log anything, and your consistency will increase over time."
+          />
+          <FaqItem
+            question="What happens if I forget my App Password?"
+            answer="If you forget your App Password, you can use the custom recovery questions you created to reset it. However, if you forget both your password and the answers to your recovery questions, you will be unable to bypass the security lock, as the app is entirely offline and has no way to recover your data for you."
+          />
+          <FaqItem
+            question="How do the colored dots in the calendar work?"
+            answer="Each time you complete habits from a category, a dot matching that category's color appears under the date in the calendar. If you complete habits from more than two categories, a 3rd dot will continuously animate, cycling through the colors of all remaining completed categories. For Bad Habits, a dot only appears on days where you successfully avoided doing them (a clean day)."
           />
         </Animated.View>
 
@@ -472,6 +421,9 @@ export default function SettingsScreen() {
             <Text style={T.caption}>
               A premium offline-first habit tracker and personal behavioral intelligence system.
               All data stays on your device.
+            </Text>
+            <Text style={[T.xs, { color: Colors.textMuted, marginTop: Spacing[1] }]}>
+              Version {Constants.expoConfig?.version ?? '3.0.0'}
             </Text>
             <View style={[Layout.row, { gap: Spacing[2], marginTop: Spacing[2] }]}>
               <View
@@ -498,6 +450,42 @@ export default function SettingsScreen() {
           </View>
         </Animated.View>
 
+        <View style={Divider.horizontal} />
+
+        <View style={{ marginTop: Spacing[6] }}>
+          <Text style={[T.label, { marginBottom: Spacing[2], color: Colors.danger }]}>Danger Zone</Text>
+          <SettingRow
+            icon="trash-bin-outline"
+            label="Clear All Data"
+            description="Drops all habits and logs"
+            color={Colors.danger}
+            onPress={() => {
+              Alert.alert('Clear Data', 'Are you sure?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Clear', style: 'destructive', onPress: () => executeWithAuth(clearAllData) }
+              ]);
+            }}
+          />
+        </View>
+
+        {__DEV__ && (
+          <View style={{ marginTop: Spacing[6] }}>
+            <Text style={[T.label, { marginBottom: Spacing[2], color: Colors.warning }]}>Development Tools</Text>
+            <SettingRow
+              icon="flask-outline"
+              label="Generate Sample Data"
+              description="Injects 10 habits and 50 days of logs"
+              color={Colors.warning}
+              onPress={() => {
+                Alert.alert('Generate Data', 'This will clear existing data. Proceed?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Generate', onPress: generateSampleData }
+                ]);
+              }}
+            />
+          </View>
+        )}
+
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Spacing[8], marginBottom: Spacing[4] }}>
           <Text style={[T.caption, { color: Colors.textMuted }]}>Made with </Text>
           <AnimatedHeart />
@@ -506,22 +494,25 @@ export default function SettingsScreen() {
       <ManageCategoriesSheet ref={manageCategoriesRef} />
       <AccentColorSheet ref={accentColorRef} />
       <NotificationSettingsSheet ref={notificationsRef} />
+      <SetPasswordSheet
+        ref={passwordRef}
+        onRemoveRequest={() => {
+          executeWithAuth(() => {
+            useAuthStore.getState().clearPassword();
+            Alert.alert('Removed', 'App password has been removed.');
+          });
+        }}
+      />
 
-      {/* Cross-platform passphrase modal */}
-      <PassphraseModal
-        visible={passphraseAction !== null}
-        title={
-          passphraseAction === 'import' ? '🔒 Encrypted Backup'
-          : '🔒 Set Passphrase'
-        }
-        subtitle={
-          passphraseAction === 'import'
-            ? 'This backup is encrypted. Enter the passphrase to restore.'
-            : 'Your backup will be encrypted with AES-256. Keep this passphrase safe — you need it to restore.'
-        }
-        confirmLabel={passphraseAction === 'import' ? 'Decrypt & Import' : 'Encrypt & Export'}
-        onConfirm={handlePassphraseConfirm}
-        onCancel={() => setPassphraseAction(null)}
+      <AuthModal
+        visible={pendingAuthAction !== null}
+        onSuccess={() => {
+          if (pendingAuthAction) {
+            pendingAuthAction.action();
+            setPendingAuthAction(null);
+          }
+        }}
+        onCancel={() => setPendingAuthAction(null)}
       />
     </SafeAreaView>
   );

@@ -60,6 +60,19 @@ export function getMonthDates(year: number, month: number): string[] {
   return dates;
 }
 
+/** Returns ordered YYYY-MM-DD strings for every day from the 1st of the current month to today (inclusive). */
+export function getCurrentMonthDates(): string[] {
+  const dates: string[] = [];
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const currentDay = today.getDate();
+  for (let d = 1; d <= currentDay; d++) {
+    dates.push(toDateString(new Date(year, month, d)));
+  }
+  return dates;
+}
+
 /** Returns the last N days ending today (inclusive), oldest first. */
 export function getLastNDays(n: number): string[] {
   const dates: string[] = [];

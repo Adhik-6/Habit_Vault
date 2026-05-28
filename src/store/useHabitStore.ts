@@ -5,12 +5,24 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { getHabits } from '../services/habitService';
 import { getLogsForDate, getLogsForHabit, logHabit, toggleBooleanHabit, toggleCompositeStep, incrementCounter } from '../services/logService';
 import { getCategories } from '../services/categoryService';
-import type { Habit, HabitLog, Category, StreakData } from '../types';
+import type { Habit, HabitLog, Category, StreakData, FailureReasonType } from '../types';
 import { computeHabitStrengthScore, computeStreak } from '../utils/analytics';
 import { getLast30Days, toDateString } from '../utils/dateUtils';
 import { useAnalyticsStore } from './useAnalyticsStore';
+import { useStreakTargetStore } from './useStreakTargetStore';
+
+// ── Debounced Recompute ─────────────────────────────────────────────────────
+let recomputeTimeout: ReturnType<typeof setTimeout> | null = null;
+function debouncedRecomputeAll() {
+  if (recomputeTimeout) clearTimeout(recomputeTimeout);
+  recomputeTimeout = setTimeout(() => {
+    useAnalyticsStore.getState().recomputeAll();
+    useStreakTargetStore.getState().loadTargets();
+  }, 1500);
+}
 
 // ── State Shape ─────────────────────────────────────────────────────────────
+
 
 interface HabitState {
   habits: Habit[];
@@ -32,9 +44,9 @@ interface HabitActions {
   // Mutations
   toggleHabit: (habitId: string) => Promise<void>;
   logQuantityHabit: (habitId: string, value: number, notes?: string) => Promise<void>;
-  logDurationHabit: (habitId: string, seconds: number) => Promise<void>;
   toggleCompositeStep: (habitId: string, stepId: string) => Promise<void>;
   logCounterHabit: (habitId: string, delta: number) => Promise<void>;
+  logHabitReason: (habitId: string, reason: FailureReasonType, customText?: string) => Promise<void>;
 
   // ❌ REMOVED: getHabitsForSelectedDate, getStacksWithHabits, getUnstackedHabits
 }
@@ -57,7 +69,11 @@ export const useHabitStore = create<HabitStore>()(
 
     // ── Loaders
     loadHabits: async () => {
-      set({ isLoading: true, error: null });
+      if (get().habits.length === 0) {
+        set({ isLoading: true, error: null });
+      } else {
+        set({ error: null });
+      }
       try {
         const [habits, categories] = await Promise.all([getHabits(), getCategories()]);
         set({ habits, categories });
@@ -83,105 +99,268 @@ export const useHabitStore = create<HabitStore>()(
 
     // ── Mutations
     toggleHabit: async (habitId: string) => {
-      const { selectedDate } = get();
-      const updated = await toggleBooleanHabit(habitId, selectedDate);
+      const { selectedDate, todayLogsMap, habits } = get();
+      const previousLog = todayLogsMap.get(habitId);
+      const habit = habits.find((h) => h.id === habitId);
+      if (!habit) return;
+      
+      const isComplete = !previousLog?.completedAt;
+      const shouldClearFailure = habit.isBadHabit ? !isComplete : isComplete;
+      
+      const optimisticLog: HabitLog = previousLog ? {
+        ...previousLog,
+        value: isComplete ? 1 : 0,
+        completedAt: isComplete ? new Date().toISOString() : null,
+        failureReason: shouldClearFailure ? null : previousLog.failureReason,
+        failureCustomText: shouldClearFailure ? '' : previousLog.failureCustomText
+      } : {
+        id: 'optimistic',
+        habitId,
+        date: selectedDate,
+        value: 1,
+        completedAt: new Date().toISOString(),
+        durationSeconds: 0,
+        notes: '',
+        moodRating: null,
+        failureReason: null,
+        failureCustomText: '',
+        compositeProgress: {}
+      };
+      
       set((state) => {
         const newMap = new Map(state.todayLogsMap);
-        newMap.set(habitId, updated);
+        newMap.set(habitId, optimisticLog);
         return { todayLogsMap: newMap };
       });
-      useAnalyticsStore.getState().recomputeAll();
+      debouncedRecomputeAll();
+
+      try {
+        const updated = await logHabit({
+          habitId, date: selectedDate, value: isComplete ? 1 : 0,
+          completedAt: isComplete ? new Date().toISOString() : null,
+          failureReason: shouldClearFailure ? null : (previousLog?.failureReason ?? null),
+          failureCustomText: shouldClearFailure ? '' : (previousLog?.failureCustomText ?? ''),
+        });
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          newMap.set(habitId, updated);
+          return { todayLogsMap: newMap };
+        });
+      } catch (e) {
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          if (previousLog) newMap.set(habitId, previousLog);
+          else newMap.delete(habitId);
+          return { todayLogsMap: newMap };
+        });
+        debouncedRecomputeAll();
+      }
     },
 
     logQuantityHabit: async (habitId: string, value: number, notes?: string) => {
-      const { selectedDate } = get();
-      const habit = get().habits.find((h) => h.id === habitId);
+      const { selectedDate, todayLogsMap, habits } = get();
+      const previousLog = todayLogsMap.get(habitId);
+      const habit = habits.find((h) => h.id === habitId);
+      if (!habit) return;
+      
       const isComplete = value >= (habit?.targetValue ?? 1);
-      const updated = await logHabit({
-        habitId,
-        date: selectedDate,
+      const shouldClearFailure = habit.isBadHabit ? !isComplete : isComplete;
+      
+      const optimisticLog: HabitLog = previousLog ? {
+        ...previousLog,
         value,
+        notes: notes ?? previousLog.notes,
         completedAt: isComplete ? new Date().toISOString() : null,
-        notes,
-      });
+        failureReason: shouldClearFailure ? null : previousLog.failureReason,
+        failureCustomText: shouldClearFailure ? '' : previousLog.failureCustomText
+      } : {
+        id: 'optimistic', habitId, date: selectedDate, value, notes: notes ?? '',
+        completedAt: isComplete ? new Date().toISOString() : null,
+        durationSeconds: 0, moodRating: null, failureReason: null, failureCustomText: '', compositeProgress: {}
+      };
+
       set((state) => {
         const newMap = new Map(state.todayLogsMap);
-        newMap.set(habitId, updated);
+        newMap.set(habitId, optimisticLog);
         return { todayLogsMap: newMap };
       });
-      useAnalyticsStore.getState().recomputeAll();
+      debouncedRecomputeAll();
+
+      try {
+        const updated = await logHabit({
+          habitId, date: selectedDate, value, notes: notes ?? previousLog?.notes ?? '',
+          completedAt: isComplete ? new Date().toISOString() : null,
+          failureReason: shouldClearFailure ? null : (previousLog?.failureReason ?? null),
+          failureCustomText: shouldClearFailure ? '' : (previousLog?.failureCustomText ?? ''),
+        });
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          newMap.set(habitId, updated);
+          return { todayLogsMap: newMap };
+        });
+      } catch (e) {
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          if (previousLog) newMap.set(habitId, previousLog);
+          else newMap.delete(habitId);
+          return { todayLogsMap: newMap };
+        });
+        debouncedRecomputeAll();
+      }
     },
 
-    logDurationHabit: async (habitId: string, seconds: number) => {
-      const { selectedDate } = get();
-      const habit = get().habits.find((h) => h.id === habitId);
-      const targetSeconds = (habit?.targetValue ?? 1) * 60;
-      const isComplete = seconds >= targetSeconds;
-      const updated = await logHabit({
-        habitId,
-        date: selectedDate,
-        value: seconds,
-        durationSeconds: seconds,
-        completedAt: isComplete ? new Date().toISOString() : null,
-      });
-      set((state) => {
-        const newMap = new Map(state.todayLogsMap);
-        newMap.set(habitId, updated);
-        return { todayLogsMap: newMap };
-      });
-      useAnalyticsStore.getState().recomputeAll();
-    },
 
     toggleCompositeStep: async (habitId: string, stepId: string) => {
-      const { selectedDate } = get();
-      const updated = await toggleCompositeStep(habitId, stepId, selectedDate);
-      const habit = get().habits.find((h) => h.id === habitId);
+      const { selectedDate, todayLogsMap, habits } = get();
+      const previousLog = todayLogsMap.get(habitId);
+      const habit = habits.find((h) => h.id === habitId);
+      if (!habit) return;
+      
+      const newCompositeProgress = { ...(previousLog?.compositeProgress ?? {}) };
+      newCompositeProgress[stepId] = !newCompositeProgress[stepId];
+      
       const totalSteps = habit?.compositeSteps.length ?? 1;
-      const completedSteps = Object.values(updated.compositeProgress).filter(Boolean).length;
-      if (completedSteps >= totalSteps && !updated.completedAt) {
-        updated.completedAt = new Date().toISOString();
-      }
+      const completedSteps = Object.values(newCompositeProgress).filter(Boolean).length;
+      const isComplete = completedSteps >= totalSteps;
+      const shouldClearFailure = habit.isBadHabit ? !isComplete : isComplete;
+      
+      const optimisticLog: HabitLog = previousLog ? {
+        ...previousLog,
+        value: completedSteps,
+        compositeProgress: newCompositeProgress,
+        completedAt: isComplete ? (previousLog.completedAt ?? new Date().toISOString()) : null,
+        failureReason: shouldClearFailure ? null : previousLog.failureReason,
+        failureCustomText: shouldClearFailure ? '' : previousLog.failureCustomText
+      } : {
+        id: 'optimistic', habitId, date: selectedDate, value: completedSteps, compositeProgress: newCompositeProgress,
+        completedAt: isComplete ? new Date().toISOString() : null,
+        durationSeconds: 0, notes: '', moodRating: null, failureReason: null, failureCustomText: ''
+      };
+
       set((state) => {
         const newMap = new Map(state.todayLogsMap);
-        newMap.set(habitId, updated);
+        newMap.set(habitId, optimisticLog);
         return { todayLogsMap: newMap };
       });
-      useAnalyticsStore.getState().recomputeAll();
+      debouncedRecomputeAll();
+
+      try {
+        const updated = await logHabit({
+          habitId, date: selectedDate, value: completedSteps,
+          compositeProgress: newCompositeProgress,
+          completedAt: isComplete ? (previousLog?.completedAt ?? new Date().toISOString()) : null,
+          failureReason: shouldClearFailure ? null : (previousLog?.failureReason ?? null),
+          failureCustomText: shouldClearFailure ? '' : (previousLog?.failureCustomText ?? ''),
+        });
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          newMap.set(habitId, updated);
+          return { todayLogsMap: newMap };
+        });
+      } catch (e) {
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          if (previousLog) newMap.set(habitId, previousLog);
+          else newMap.delete(habitId);
+          return { todayLogsMap: newMap };
+        });
+        debouncedRecomputeAll();
+      }
     },
 
     logCounterHabit: async (habitId: string, delta: number) => {
-      const { selectedDate } = get();
-      const updated = await incrementCounter(habitId, delta, selectedDate);
+      const { selectedDate, todayLogsMap, habits } = get();
+      const previousLog = todayLogsMap.get(habitId);
+      const habit = habits.find((h) => h.id === habitId);
+      if (!habit) return;
+      
+      const newValue = (previousLog?.value ?? 0) + delta;
+      
+      const optimisticLog: HabitLog = previousLog ? {
+        ...previousLog,
+        value: newValue,
+        completedAt: newValue > 0 ? (previousLog.completedAt ?? new Date().toISOString()) : null
+      } : {
+        id: 'optimistic', habitId, date: selectedDate, value: newValue,
+        completedAt: newValue > 0 ? new Date().toISOString() : null,
+        durationSeconds: 0, notes: '', moodRating: null, failureReason: null, failureCustomText: '', compositeProgress: {}
+      };
+
       set((state) => {
         const newMap = new Map(state.todayLogsMap);
-        newMap.set(habitId, updated);
+        newMap.set(habitId, optimisticLog);
         return { todayLogsMap: newMap };
       });
-      useAnalyticsStore.getState().recomputeAll();
+      debouncedRecomputeAll();
+
+      try {
+        const updated = await logHabit({
+          habitId, date: selectedDate, value: newValue,
+          completedAt: newValue > 0 ? (previousLog?.completedAt ?? new Date().toISOString()) : null,
+        });
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          newMap.set(habitId, updated);
+          return { todayLogsMap: newMap };
+        });
+      } catch (e) {
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          if (previousLog) newMap.set(habitId, previousLog);
+          else newMap.delete(habitId);
+          return { todayLogsMap: newMap };
+        });
+        debouncedRecomputeAll();
+      }
+    },
+
+    logHabitReason: async (habitId: string, reason: FailureReasonType, customText?: string) => {
+      const { selectedDate, todayLogsMap } = get();
+      const previousLog = todayLogsMap.get(habitId);
+      
+      const optimisticLog: HabitLog = previousLog ? {
+        ...previousLog,
+        failureReason: reason,
+        failureCustomText: customText ?? previousLog.failureCustomText
+      } : {
+        id: 'optimistic', habitId, date: selectedDate, value: 0,
+        completedAt: null, durationSeconds: 0, notes: '', moodRating: null,
+        failureReason: reason, failureCustomText: customText ?? '', compositeProgress: {}
+      };
+
+      set((state) => {
+        const newMap = new Map(state.todayLogsMap);
+        newMap.set(habitId, optimisticLog);
+        return { todayLogsMap: newMap };
+      });
+      debouncedRecomputeAll();
+
+      try {
+        const updated = await logHabit({
+          habitId, date: selectedDate, value: previousLog?.value ?? 0,
+          completedAt: previousLog?.completedAt ?? null,
+          durationSeconds: previousLog?.durationSeconds ?? 0,
+          notes: previousLog?.notes ?? '',
+          moodRating: previousLog?.moodRating ?? null,
+          compositeProgress: previousLog?.compositeProgress ?? {},
+          failureReason: reason, failureCustomText: customText ?? ''
+        });
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          newMap.set(habitId, updated);
+          return { todayLogsMap: newMap };
+        });
+      } catch (e) {
+        set((state) => {
+          const newMap = new Map(state.todayLogsMap);
+          if (previousLog) newMap.set(habitId, previousLog);
+          else newMap.delete(habitId);
+          return { todayLogsMap: newMap };
+        });
+        debouncedRecomputeAll();
+      }
     },
 
     // ❌ REMOVED: The computed selectors from the store definition
   })),
 );
-
-// ── Background streak/score precomputer ─────────────────────────────────────
-
-export async function precomputeAnalytics(habits: Habit[]): Promise<void> {
-  const last30 = getLast30Days();
-  const updates: { streakCache: Map<string, StreakData>; scoreCache: Map<string, number> } = {
-    streakCache: new Map(),
-    scoreCache: new Map(),
-  };
-
-  await Promise.all(
-    habits.map(async (h) => {
-      const logs = await getLogsForHabit(h.id);
-      const streak = computeStreak(logs);
-      const score = computeHabitStrengthScore(h.id, logs, last30);
-      updates.streakCache.set(h.id, streak);
-      updates.scoreCache.set(h.id, score.score);
-    }),
-  );
-
-  useHabitStore.setState(updates);
-}

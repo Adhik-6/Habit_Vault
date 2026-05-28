@@ -3,7 +3,7 @@
 
   <h1>HabitVault</h1>
 
-  <img src="./assets/images/app-icon.png" alt="HabitVault Logo" width="200" style="border-radius: 10%; margin-bottom: 20px;" />
+  <img src="./assets/images/app_icon.png" alt="HabitVault Logo" width="200" style="border-radius: 10%; margin-bottom: 20px;" />
   
   <p>A beautiful, offline-first habit tracking application designed to help you build and sustain powerful daily routines.</p>
   
@@ -99,17 +99,20 @@ Building sustainable habits requires a system that is both engaging and friction
 <!-- Features -->
 ### :dart: Features
 
-- **Dynamic Tracking:** Log boolean habits, quantitative habits (minutes, pages), or composite checklists.
+- **Dynamic Tracking:** Log boolean habits, quantitative habits (minutes, pages, with custom step sizes), or composite checklists.
+- **Bad Habit Tracking:** Specifically track and break bad habits with inverted analytics and distinct visual alerts.
 - **Unified Dashboard:** Collapsible 7-day strip or full monthly calendar view with progress rings.
 - **Categorization System:** Group your habits into custom categories with unique icons and colors.
+- **Goal Tracking:** Set and track custom N-day streak targets for any of your habits.
 - **Rich Analytics:**
   - Activity Heatmaps.
-  - Streak tracking (Current & Longest).
+  - Streak tracking (Current & Longest, frequency-aware).
   - 30-Day "Strength Score".
   - Mood vs. Habit completion trend line charts.
+  - In-depth Failure Reason Analysis for missed habits.
 - **Offline First:** 100% local data storage ensuring instantaneous speed and total privacy.
 - **Daily Reminders:** Set custom local notifications to remind you to log your mood and habits.
-- **Data Portability:** Export and import your entire history via JSON or CSV, secured with AES-256 encryption.
+- **Data Portability:** Export and import your entire history via JSON (encrypted or plain text options available).
 
 <!-- Getting Started -->
 ## 	:toolbox: Getting Started
@@ -176,8 +179,10 @@ HabitVault is designed to be highly intuitive:
 - [x] Initial SQLite architecture and core CRUD operations.
 - [x] Complex Analytics (Heatmaps, Streaks, Strength Scores).
 - [x] Category Grouping & Navigation Overhaul.
-- [x] CSV & JSON Export/Import with AES-256 Encryption.
+- [x] JSON Export/Import with AES-256 Encryption & Plain options.
 - [x] Habit Reminders & Notifications.
+- [x] Bad Habit Tracking (Inverted analytics & tracking).
+- [x] Custom Streak Targets & Goal Tracking.
 - [ ] Cross-device synchronization (Optional Cloud Sync).
 - [ ] Lock-screen Widgets (iOS/Android).
 

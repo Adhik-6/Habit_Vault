@@ -15,6 +15,7 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -75,13 +76,29 @@ export function StrengthScoreWidget() {
   const globalScore = useAnalyticsStore((s) => s.globalScore);
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const habits = useHabitStore((s) => s.habits);
+  const categories = useHabitStore((s) => s.categories);
   const ac = useAccentColors();
 
-  const top5 = [...strengthScores]
+  let eligibleScores = strengthScores.filter((s) => s.scheduledDaysCount >= 14);
+  if (eligibleScores.length === 0) {
+    eligibleScores = strengthScores; // Fallback to all if none have 14 days
+  }
+
+  const top5 = [...eligibleScores]
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
   const habitMap = new Map(habits.map((h) => [h.id, h]));
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
+
+  /** Resolve display color: category color → habit.color → accent */
+  const resolveHabitColor = (habit: { color: string; categoryId: string | null }): string => {
+    if (habit.categoryId) {
+      const cat = categoryMap.get(habit.categoryId);
+      if (cat?.color) return cat.color;
+    }
+    return habit.color ?? ac.accent;
+  };
 
   const scoreLabel =
     globalScore >= 80 ? 'Elite' :
@@ -112,22 +129,41 @@ export function StrengthScoreWidget() {
             const habit = habitMap.get(s.habitId);
             if (!habit) return null;
             const pct = s.score / 100;
+            const habitColor = resolveHabitColor(habit);
             return (
               <View key={s.habitId} style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2] }}>
                 <Text style={[T.xs, { color: Colors.textDim, minWidth: 20 }]} numberOfLines={1}>#{i + 1}</Text>
-                <View style={{
-                  width: 8, height: 8, borderRadius: 4,
-                  backgroundColor: habit.color ?? ac.accent,
-                }} />
-                <Text style={[T.sm, { flex: 1 }]} numberOfLines={1}>{habit.name}</Text>
+                {habit.isBadHabit ? (
+                  <LinearGradient
+                    colors={['#1A1A2E', habitColor]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={{ width: 8, height: 8, borderRadius: 4 }}
+                  />
+                ) : (
+                  <View style={{
+                    width: 8, height: 8, borderRadius: 4,
+                    backgroundColor: habitColor,
+                  }} />
+                )}
+                <Text style={[T.sm, { flex: 1 }]} numberOfLines={1}>
+                  {habit.name}
+                </Text>
                 {/* Mini bar */}
                 <View style={{ width: 60, height: 4, backgroundColor: Colors.border, borderRadius: 2, overflow: 'hidden' }}>
-                  <View style={{
-                    width: `${pct * 100}%`,
-                    height: 4,
-                    backgroundColor: habit.color ?? ac.accent,
-                    borderRadius: 2,
-                  }} />
+                  {habit.isBadHabit ? (
+                    <LinearGradient
+                      colors={['#1A1A2E', habitColor]}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={{ width: `${pct * 100}%`, height: 4, borderRadius: 2 }}
+                    />
+                  ) : (
+                    <View style={{
+                      width: `${pct * 100}%`,
+                      height: 4,
+                      backgroundColor: habitColor,
+                      borderRadius: 2,
+                    }} />
+                  )}
                 </View>
                 <Text style={[T.xs, { color: Colors.textMuted, width: 24, textAlign: 'right' }]}>
                   {s.score}

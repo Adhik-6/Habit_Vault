@@ -4,8 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet, type BottomSheetRef } from '@src/components/common/BottomSheet';
 import { useHabitStore } from '@store/useHabitStore';
 import { createCategory, updateCategory, deleteCategory } from '@services/categoryService';
+import { BAD_HABITS_CATEGORY_ID } from '@services/habitService';
 import { Colors, Spacing, Radius } from '@design/tokens';
 import { Cards, Inputs, Buttons, Text as T } from '@design/components';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAccentColors } from '@/hooks/use-accent-colors';
 
@@ -62,15 +64,29 @@ export const ManageCategoriesSheet = React.forwardRef<BottomSheetRef, {}>((props
           <View style={{ gap: Spacing[3], marginBottom: Spacing[5] }}>
             {categories.map(c => (
               <View key={c.id} style={[Cards.compact, { flexDirection: 'row', alignItems: 'center', gap: Spacing[3] }]}>
-                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c.color }} />
+                {c.id === BAD_HABITS_CATEGORY_ID ? (
+                  <LinearGradient
+                    colors={['#000000', Colors.danger]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={{ width: 14, height: 14, borderRadius: 7 }}
+                  />
+                ) : (
+                  <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c.color }} />
+                )}
                 <Text style={[T.bodyMedium, { flex: 1 }]}>{c.name}</Text>
                 
-                <TouchableOpacity onPress={() => { setEditId(c.id); setName(c.name); setColor(c.color); }}>
-                  <Ionicons name="pencil" size={20} color={Colors.textSecondary} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(c.id, c.name)}>
-                  <Ionicons name="trash" size={20} color={Colors.danger} />
-                </TouchableOpacity>
+                {c.id === BAD_HABITS_CATEGORY_ID ? (
+                  <Ionicons name="lock-closed" size={16} color={Colors.textMuted} style={{ paddingHorizontal: Spacing[2] }} />
+                ) : (
+                  <>
+                    <TouchableOpacity onPress={() => { setEditId(c.id); setName(c.name); setColor(c.color); }}>
+                      <Ionicons name="pencil" size={20} color={Colors.textSecondary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDelete(c.id, c.name)}>
+                      <Ionicons name="trash" size={20} color={Colors.danger} />
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             ))}
 

@@ -2,9 +2,13 @@
 // HABIT CORE TYPES
 // ─────────────────────────────────────────────
 
-export type HabitType = 'boolean' | 'quantity' | 'duration' | 'composite' | 'counter';
+export type HabitType = 'boolean' | 'quantity' | 'composite' | 'counter';
 export type FrequencyType = 'daily' | 'weekly' | 'custom';
-export type FailureReasonType = 'tired' | 'busy' | 'forgot' | 'lazy' | 'custom';
+/** Failure reasons for good habits */
+export type GoodHabitFailureReason = 'tired' | 'busy' | 'forgot' | 'lazy' | 'custom';
+/** Slip reasons for bad habits */
+export type BadHabitSlipReason = 'urge' | 'stressed' | 'bored' | 'triggered' | 'social_pressure' | 'custom';
+export type FailureReasonType = GoodHabitFailureReason | BadHabitSlipReason;
 
 export interface FrequencyRule {
   type: FrequencyType;
@@ -25,8 +29,9 @@ export interface Habit {
   name: string;
   description: string;
   type: HabitType;
-  /** For quantity: target amount. For duration: target seconds. For boolean: 1. */
+  /** For quantity: target amount. For boolean: 1. */
   targetValue: number;
+  stepValue: number;
   unit: string; // e.g. 'ml', 'pages', 'min', ''
   frequencyRules: FrequencyRule;
   color: string; // hex
@@ -36,6 +41,8 @@ export interface Habit {
   createdAt: string; // ISO 8601
   archivedAt: string | null;
   sortOrder: number;
+  /** True if this habit tracks something the user wants to AVOID. */
+  isBadHabit: boolean;
 }
 
 // ─────────────────────────────────────────────
@@ -121,10 +128,14 @@ export interface HabitStrengthScore {
   habitId: string;
   /** 0-100 composite score */
   score: number;
-  completionRate: number; // 0-1
+  completionRate: number; // 0-1 (for bad habits: avoidance rate)
   consistencyScore: number; // 0-1
   streakBonus: number; // 0-20 extra points
   streak: StreakData;
+  /** True if this score belongs to a bad habit (UI uses this for label inversion) */
+  isBadHabit: boolean;
+  /** The total number of scheduled days evaluated (used for Top Habits eligibility) */
+  scheduledDaysCount: number;
 }
 
 /** Aggregated data for a single calendar day (for heatmap + calendar) */
@@ -144,7 +155,7 @@ export interface DayIntensity {
 
 
 export interface HabitInsight {
-  type: 'best_time' | 'worst_day' | 'streak_risk' | 'improving' | 'declining' | 'pattern';
+  type: 'best_time' | 'worst_day' | 'streak_risk' | 'improving' | 'declining' | 'pattern' | 'bad_habit_clean' | 'bad_habit_slip';
   habitId?: string;
   message: string;
   data: Record<string, unknown>;
@@ -177,7 +188,13 @@ export interface WeekdayStats {
 
 export interface HabitWithLog extends Habit {
   todayLog: HabitLog | null;
+  /** Factual: did the user perform/log this action today? */
   isCompleted: boolean;
+  /** Value judgment: is this habit in a "positive" state for the day?
+   *  Good habits: same as isCompleted. Bad habits: opposite of isCompleted. */
+  contributesToProgress: boolean;
+  /** Decimal weight (0 to 1) representing partial completion (e.g. 0.5 for 2/4 checklist steps). Incorporates bad habit inversion (1 - rawWeight). */
+  completionWeight: number;
   streak: StreakData;
   strengthScore: number;
 }
@@ -202,6 +219,9 @@ export interface BackupData {
   moodLogs: MoodLog[];
   failureReasons: FailureReason[];
   achievements: Achievement[];
+  streakTargets?: StreakTarget[];
+  settings?: any;
+  auth?: any;
 }
 
 export interface BackupMeta {
@@ -211,3 +231,23 @@ export interface BackupMeta {
   logCount: number;
   encrypted: boolean;
 }
+
+// ─────────────────────────────────────────────
+// STREAK TARGET TYPES
+// ─────────────────────────────────────────────
+
+export interface StreakTarget {
+  id: string;
+  habitId: string;
+  label: string | null;
+  targetDays: number;
+  createdAt: string; // ISO timestamp
+  achievedAt: string | null; // ISO timestamp
+}
+
+export interface StreakTargetWithProgress extends StreakTarget {
+  currentStreak: number;
+  isAchieved: boolean;
+  daysRemaining: number;
+}
+

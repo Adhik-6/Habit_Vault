@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import Animated, { useAnimatedProps, withTiming, useSharedValue } from 'react-native-reanimated';
 import { Colors } from '@design/tokens';
 
@@ -12,6 +12,7 @@ interface ProgressRingProps {
   progress: number; // 0-1
   color?: string;
   trackColor?: string;
+  isBadHabitGradient?: boolean;
 }
 
 export function ProgressRing({
@@ -20,6 +21,7 @@ export function ProgressRing({
   progress,
   color = Colors.accent,
   trackColor = Colors.border,
+  isBadHabitGradient = false,
 }: ProgressRingProps) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -40,6 +42,14 @@ export function ProgressRing({
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+        {isBadHabitGradient && (
+          <Defs>
+            <LinearGradient id="badGradient" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor="#1A1A1A" stopOpacity="1" />
+              <Stop offset="1" stopColor={Colors.danger} stopOpacity="1" />
+            </LinearGradient>
+          </Defs>
+        )}
         {/* Track */}
         <Circle
           cx={cx} cy={cy} r={radius}
@@ -50,7 +60,7 @@ export function ProgressRing({
         {/* Fill */}
         <AnimatedCircle
           cx={cx} cy={cy} r={radius}
-          stroke={color}
+          stroke={isBadHabitGradient ? 'url(#badGradient)' : color}
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}

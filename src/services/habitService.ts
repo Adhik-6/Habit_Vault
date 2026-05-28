@@ -3,6 +3,9 @@ import type { SQLiteBindValue } from 'expo-sqlite';
 import type { Habit, HabitLog, HabitType, FrequencyRule } from '../types';
 import { generateId } from '../utils/idUtils';
 import { toDateString } from '../utils/dateUtils';
+import { BAD_HABITS_CATEGORY_ID } from '../db/schema';
+
+export { BAD_HABITS_CATEGORY_ID } from '../db/schema';
 
 // ── Row mapper ──────────────────────────────────────────────────────────────
 
@@ -12,6 +15,7 @@ interface HabitRow {
   description: string;
   type: HabitType;
   targetValue: number;
+  stepValue: number;
   unit: string;
   frequencyRules: string;
   color: string;
@@ -21,6 +25,7 @@ interface HabitRow {
   createdAt: string;
   archivedAt: string | null;
   sortOrder: number;
+  isBadHabit: number;
 }
 
 function rowToHabit(row: HabitRow): Habit {
@@ -28,6 +33,7 @@ function rowToHabit(row: HabitRow): Habit {
     ...row,
     frequencyRules: JSON.parse(row.frequencyRules) as FrequencyRule,
     compositeSteps: JSON.parse(row.compositeSteps),
+    isBadHabit: !!row.isBadHabit,
   };
 }
 
@@ -64,6 +70,7 @@ export interface CreateHabitInput {
   description?: string;
   type: HabitType;
   targetValue?: number;
+  stepValue?: number;
   unit?: string;
   frequencyRules?: FrequencyRule;
   color?: string;
@@ -72,38 +79,42 @@ export interface CreateHabitInput {
   compositeSteps?: Habit['compositeSteps'];
   sortOrder?: number;
   createdAt?: string;
+  isBadHabit?: boolean;
 }
 
 export async function createHabit(input: CreateHabitInput): Promise<Habit> {
   const db = await getDb();
+  const isBad = input.isBadHabit ?? false;
   const habit: Habit = {
     id: generateId(),
     name: input.name,
     description: input.description ?? '',
     type: input.type,
     targetValue: input.targetValue ?? 1,
+    stepValue: input.stepValue ?? 1,
     unit: input.unit ?? '',
     frequencyRules: input.frequencyRules ?? { type: 'daily' },
     color: input.color ?? '#6366F1',
     icon: input.icon ?? 'star',
-    categoryId: input.categoryId ?? null,
+    categoryId: isBad ? BAD_HABITS_CATEGORY_ID : (input.categoryId ?? null),
     compositeSteps: input.compositeSteps ?? [],
     createdAt: input.createdAt ?? new Date().toISOString(),
     archivedAt: null,
     sortOrder: input.sortOrder ?? 0,
+    isBadHabit: isBad,
   };
 
   await db.runAsync(
     `INSERT INTO habits
-      (id, name, description, type, targetValue, unit, frequencyRules,
-       color, icon, categoryId, compositeSteps, createdAt, archivedAt, sortOrder)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      (id, name, description, type, targetValue, stepValue, unit, frequencyRules,
+       color, icon, categoryId, compositeSteps, createdAt, archivedAt, sortOrder, isBadHabit)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       habit.id, habit.name, habit.description, habit.type,
-      habit.targetValue, habit.unit, JSON.stringify(habit.frequencyRules),
+      habit.targetValue, habit.stepValue, habit.unit, JSON.stringify(habit.frequencyRules),
       habit.color, habit.icon, habit.categoryId,
       JSON.stringify(habit.compositeSteps), habit.createdAt,
-      habit.archivedAt, habit.sortOrder,
+      habit.archivedAt, habit.sortOrder, habit.isBadHabit ? 1 : 0,
     ],
   );
   return habit;
@@ -120,6 +131,7 @@ export async function updateHabit(id: string, input: UpdateHabitInput): Promise<
   if (input.description !== undefined) { fields.push('description = ?'); values.push(input.description); }
   if (input.type !== undefined) { fields.push('type = ?'); values.push(input.type); }
   if (input.targetValue !== undefined) { fields.push('targetValue = ?'); values.push(input.targetValue); }
+  if (input.stepValue !== undefined) { fields.push('stepValue = ?'); values.push(input.stepValue); }
   if (input.unit !== undefined) { fields.push('unit = ?'); values.push(input.unit); }
   if (input.frequencyRules !== undefined) { fields.push('frequencyRules = ?'); values.push(JSON.stringify(input.frequencyRules)); }
   if (input.color !== undefined) { fields.push('color = ?'); values.push(input.color); }
@@ -127,6 +139,13 @@ export async function updateHabit(id: string, input: UpdateHabitInput): Promise<
   if (input.categoryId !== undefined) { fields.push('categoryId = ?'); values.push(input.categoryId); }
   if (input.compositeSteps !== undefined) { fields.push('compositeSteps = ?'); values.push(JSON.stringify(input.compositeSteps)); }
   if (input.sortOrder !== undefined) { fields.push('sortOrder = ?'); values.push(input.sortOrder); }
+  if (input.isBadHabit !== undefined) {
+    fields.push('isBadHabit = ?'); values.push(input.isBadHabit ? 1 : 0);
+    // When marking as bad habit, force category to system category
+    if (input.isBadHabit) {
+      fields.push('categoryId = ?'); values.push(BAD_HABITS_CATEGORY_ID);
+    }
+  }
 
   if (fields.length === 0) return;
   values.push(id);
@@ -168,7 +187,7 @@ export async function reorderHabits(orderedIds: string[]): Promise<void> {
  * the creation date and frequency rules.
  */
 export function isHabitScheduledForDate(habit: Habit, dateStr: string): boolean {
-  const createdDate = habit.createdAt.split('T')[0];
+  const createdDate = toDateString(new Date(habit.createdAt));
   if (dateStr < createdDate) return false;
 
   const dayOfWeek = new Date(dateStr + 'T12:00:00').getDay();

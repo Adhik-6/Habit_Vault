@@ -119,7 +119,7 @@ export async function logHabit(input: LogHabitInput): Promise<HabitLog> {
     value: input.value,
     completedAt: input.completedAt !== undefined
       ? input.completedAt
-      : input.value > 0 ? new Date().toISOString() : null,
+      : (existing ? existing.completedAt : (input.value > 0 ? new Date().toISOString() : null)),
     durationSeconds: input.durationSeconds ?? existing?.durationSeconds ?? 0,
     notes: input.notes ?? existing?.notes ?? '',
     moodRating: input.moodRating !== undefined ? input.moodRating : existing?.moodRating ?? null,

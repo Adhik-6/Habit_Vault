@@ -3,6 +3,9 @@
 // and index definitions for habitvault.db
 // ─────────────────────────────────────────────
 
+/** Well-known ID for the locked "Bad Habits" system category. */
+export const BAD_HABITS_CATEGORY_ID = '__bad_habits__';
+
 export const CREATE_MIGRATIONS_TABLE = `
   CREATE TABLE IF NOT EXISTS migrations (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +32,7 @@ export const CREATE_HABITS_TABLE = `
     description    TEXT    NOT NULL DEFAULT '',
     type           TEXT    NOT NULL DEFAULT 'boolean',
     targetValue    REAL    NOT NULL DEFAULT 1,
+    stepValue      REAL    NOT NULL DEFAULT 1,
     unit           TEXT    NOT NULL DEFAULT '',
     frequencyRules TEXT    NOT NULL DEFAULT '{"type":"daily"}',
     color          TEXT    NOT NULL DEFAULT '#6366F1',
@@ -38,6 +42,7 @@ export const CREATE_HABITS_TABLE = `
     createdAt      TEXT    NOT NULL,
     archivedAt     TEXT,
     sortOrder      INTEGER NOT NULL DEFAULT 0,
+    isBadHabit     INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL
   );
 `;
@@ -102,4 +107,17 @@ export const CREATE_INDEXES: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_habits_active           ON habits(archivedAt);`,
   `CREATE INDEX IF NOT EXISTS idx_failure_reasons_habit   ON failure_reasons(habitId);`,
   `CREATE INDEX IF NOT EXISTS idx_mood_logs_date          ON mood_logs(date);`,
+  `CREATE INDEX IF NOT EXISTS idx_streak_targets_habitId  ON streak_targets(habitId);`,
 ];
+
+export const CREATE_STREAK_TARGETS_TABLE = `
+  CREATE TABLE IF NOT EXISTS streak_targets (
+    id         TEXT PRIMARY KEY NOT NULL,
+    habitId    TEXT NOT NULL,
+    label      TEXT,
+    targetDays INTEGER NOT NULL,
+    createdAt  TEXT NOT NULL,
+    achievedAt TEXT,
+    FOREIGN KEY (habitId) REFERENCES habits(id) ON DELETE CASCADE
+  );
+`;

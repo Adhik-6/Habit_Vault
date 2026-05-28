@@ -32,12 +32,15 @@ export function StreakWidget({ habitId }: StreakWidgetProps) {
   let longest = 0;
   let habitName = 'Best Habit';
 
+  let isBadHabit = false;
+
   if (habitId) {
     const scoreObj = strengthScores.find(s => s.habitId === habitId);
     const habit = habits.find((h) => h.id === habitId);
     current = scoreObj?.streak?.current ?? 0;
     longest = scoreObj?.streak?.longest ?? 0;
     habitName = habit?.name ?? '';
+    isBadHabit = habit?.isBadHabit ?? false;
   } else {
     // Find habit with highest current streak
     for (const score of strengthScores) {
@@ -46,6 +49,7 @@ export function StreakWidget({ habitId }: StreakWidgetProps) {
         longest = score.streak.longest;
         const h = habits.find((h) => h.id === score.habitId);
         habitName = h?.name ?? '';
+        isBadHabit = h?.isBadHabit ?? false;
       }
     }
   }
@@ -77,7 +81,7 @@ export function StreakWidget({ habitId }: StreakWidgetProps) {
     <Animated.View entering={FadeInDown.duration(400)} style={[Cards.base, { marginBottom: Spacing[4] }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ flex: 1 }}>
-          <Text style={T.label}>Current Streak</Text>
+          <Text style={T.label}>{isBadHabit ? 'Clean Streak' : 'Current Streak'}</Text>
           <Text style={T.caption} numberOfLines={1}>{habitName}</Text>
         </View>
 
@@ -87,25 +91,25 @@ export function StreakWidget({ habitId }: StreakWidgetProps) {
             <Animated.View
               style={[{
                 position: 'absolute', width: 52, height: 52, borderRadius: 26,
-                backgroundColor: Colors.warning,
+                backgroundColor: isBadHabit ? Colors.info : Colors.warning,
               }, glowStyle]}
             />
           )}
           <View style={{
             width: 52, height: 52, borderRadius: 26,
-            backgroundColor: isOnFire ? Colors.warningDim : Colors.surfaceElevated,
+            backgroundColor: isOnFire ? (isBadHabit ? Colors.info + '1A' : Colors.warningDim) : Colors.surfaceElevated,
             borderWidth: 1.5,
-            borderColor: isOnFire ? Colors.warning : Colors.border,
+            borderColor: isOnFire ? (isBadHabit ? Colors.info : Colors.warning) : Colors.border,
             alignItems: 'center', justifyContent: 'center',
           }}>
-            <Text style={{ fontSize: 24 }}>{isOnFire ? '🔥' : '💤'}</Text>
+            <Text style={{ fontSize: 24 }}>{isOnFire ? (isBadHabit ? '🛡️' : '🔥') : '💤'}</Text>
           </View>
         </View>
       </View>
 
       {/* Streak number */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: Spacing[3], marginVertical: Spacing[3] }}>
-        <Text style={[T.score, { color: isOnFire ? Colors.warning : Colors.text }]}>
+        <Text style={[T.score, { color: isOnFire ? (isBadHabit ? Colors.info : Colors.warning) : Colors.text }]}>
           {current}
         </Text>
         <Text style={[T.body, { color: Colors.textMuted, paddingBottom: 4 }]}>days</Text>
@@ -129,7 +133,7 @@ export function StreakWidget({ habitId }: StreakWidgetProps) {
             <View style={{
               width: `${pctToMilestone * 100}%`,
               height: 5,
-              backgroundColor: isOnFire ? Colors.warning : ac.accent,
+              backgroundColor: isOnFire ? (isBadHabit ? Colors.info : Colors.warning) : ac.accent,
               borderRadius: 3,
             }} />
           </View>

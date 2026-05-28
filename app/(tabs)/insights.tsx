@@ -24,6 +24,8 @@ import { ProgressRing } from '@src/components/common/ProgressRing';
 import { FailureAnalysisWidget } from '@src/components/insights/FailureAnalysisWidget';
 import { useRouter } from 'expo-router';
 import { MoodCorrelationWidget } from '@src/components/insights/MoodCorrelationWidget';
+import { InsightRow } from '@src/components/insights/InsightRow';
+import { GoalsTab } from '@src/components/insights/GoalsTab';
 
 import { Cards, Layout, Text as T } from '@design/components';
 import { Colors, moodColor, Radius, Spacing } from '@design/tokens';
@@ -36,6 +38,7 @@ import { useAccentColors } from '@/hooks/use-accent-colors';
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'grid-outline' },
   { id: 'habits', label: 'Habits', icon: 'list-outline' },
+  { id: 'goals', label: 'Goals', icon: 'trophy-outline' },
   { id: 'mood', label: 'Mood', icon: 'happy-outline' },
   { id: 'patterns', label: 'Patterns', icon: 'stats-chart-outline' },
 ] as const;
@@ -49,9 +52,10 @@ function OverviewTab() {
   const recomputeAll = useAnalyticsStore((s) => s.recomputeAll);
   const habits = useHabitStore((s) => s.habits);
   const habitsForDate = useHabitsForSelectedDate();
-  const completed = habitsForDate.filter((h) => h.isCompleted).length;
+  const completed = habitsForDate.filter((h) => h.contributesToProgress).length;
   const total = habitsForDate.length;
   const ac = useAccentColors();
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const scoreColor =
     globalScore >= 75 ? Colors.success :
@@ -121,35 +125,23 @@ function OverviewTab() {
         ) : (
           <View style={[Cards.base]}>
             <Text style={[T.label, { marginBottom: Spacing[3] }]}>Key Insights</Text>
-            {insights.slice(0, 6).map((insight, i) => {
-              const { icon, color } = ({
-                improving: { icon: 'trending-up', color: Colors.success },
-                declining: { icon: 'trending-down', color: Colors.danger },
-                streak_risk: { icon: 'flame-outline', color: Colors.warning },
-                worst_day: { icon: 'warning-outline', color: Colors.warning },
-                pattern: { icon: 'repeat-outline', color: Colors.info },
-                best_time: { icon: 'time-outline', color: ac.accent },
-              } as Record<string, { icon: string; color: string }>)[insight.type] ?? { icon: 'bulb-outline', color: ac.accent };
-
-              return (
-                <View key={i} style={{
-                  flexDirection: 'row', alignItems: 'flex-start', gap: Spacing[3],
-                  paddingVertical: Spacing[2],
-                  borderBottomWidth: i < Math.min(insights.length, 6) - 1 ? 1 : 0,
-                  borderBottomColor: Colors.border,
-                }}>
-                  <View style={{
-                    width: 28, height: 28, borderRadius: Radius.md,
-                    backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Ionicons name={icon as any} size={14} color={color} />
-                  </View>
-                  <Text style={[T.sm, { flex: 1, lineHeight: 20, color: Colors.text }]}>
-                    {insight.message}
-                  </Text>
-                </View>
-              );
-            })}
+            {insights.slice(0, isExpanded ? insights.length : 6).map((insight, i) => (
+              <InsightRow 
+                key={i} 
+                insight={insight} 
+                isLast={i === (isExpanded ? insights.length : Math.min(insights.length, 6)) - 1} 
+              />
+            ))}
+            {insights.length > 6 && (
+              <TouchableOpacity 
+                onPress={() => setIsExpanded(!isExpanded)}
+                style={{ alignItems: 'center', marginTop: Spacing[2], paddingVertical: Spacing[2] }}
+              >
+                <Text style={[T.smMedium, { color: ac.accent }]}>
+                  {isExpanded ? 'Show less' : `Show all ${insights.length} insights`}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </Animated.View>
@@ -161,13 +153,35 @@ function OverviewTab() {
 // ── Habits Tab ────────────────────────────────────────────────────────────────
 
 function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }) {
+  const [filterMode, setFilterMode] = useState<'all' | 'normal' | 'bad'>('all');
+  const failurePatterns = useAnalyticsStore((s) => s.failurePatterns);
+  const badHabitFailurePatterns = useAnalyticsStore((s) => s.badHabitFailurePatterns);
+  const customReasons = useAnalyticsStore((s) => s.customReasons);
+  const badHabitCustomReasons = useAnalyticsStore((s) => s.badHabitCustomReasons);
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const habits = useHabitStore((s) => s.habits);
+  const categories = useHabitStore((s) => s.categories);
   const habitsForDate = useHabitsForSelectedDate();
   const habitMap = new Map(habitsForDate.map((h) => [h.id, h]));
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
   const ac = useAccentColors();
 
-  const sorted = [...strengthScores].sort((a, b) => b.score - a.score);
+  /** Resolve display color: category color → habit.color → accent */
+  const resolveHabitColor = (habit: { color: string; categoryId: string | null }): string => {
+    if (habit.categoryId) {
+      const cat = categoryMap.get(habit.categoryId);
+      if (cat?.color) return cat.color;
+    }
+    return habit.color ?? ac.accent;
+  };
+
+  const filteredScores = strengthScores.filter(s => {
+    if (filterMode === 'all') return true;
+    if (filterMode === 'bad') return s.isBadHabit;
+    return !s.isBadHabit;
+  });
+
+  const sorted = [...filteredScores].sort((a, b) => b.score - a.score);
 
   if (sorted.length === 0) {
     return (
@@ -181,7 +195,24 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
 
   return (
     <View style={{ gap: Spacing[3] }}>
-      <Text style={[T.label, { marginBottom: Spacing[1] }]}>All Habits — Ranked by Strength</Text>
+      <View style={{ flexDirection: 'row', backgroundColor: Colors.surfaceElevated, borderRadius: Radius.lg, padding: 4, marginBottom: Spacing[2] }}>
+        {(['all', 'normal', 'bad'] as const).map(mode => (
+          <TouchableOpacity
+            key={mode}
+            onPress={() => setFilterMode(mode)}
+            style={{
+              flex: 1, paddingVertical: Spacing[2], alignItems: 'center', borderRadius: Radius.md,
+              backgroundColor: filterMode === mode ? Colors.surface : 'transparent',
+              shadowColor: filterMode === mode ? '#000' : 'transparent', shadowOpacity: 0.1, shadowRadius: 2, elevation: filterMode === mode ? 1 : 0
+            }}
+          >
+            <Text style={[T.smMedium, { color: filterMode === mode ? ac.accent : Colors.textMuted, textTransform: 'capitalize' }]}>
+              {mode}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={[T.label, { marginBottom: Spacing[1] }]}>Ranked by Strength</Text>
       {sorted.map((s, i) => {
         const habit = habits.find((h) => h.id === s.habitId);
         const habitWithLog = habitMap.get(s.habitId);
@@ -191,6 +222,8 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
         const rank = i + 1;
         const medalEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
 
+        const habitColor = resolveHabitColor(habit);
+
         return (
           <TouchableOpacity
             key={s.habitId}
@@ -199,7 +232,12 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
           >
             <View style={[Cards.compact, {
               flexDirection: 'row', alignItems: 'center', gap: Spacing[3],
-              borderColor: rank <= 3 ? ac.accentDim : Colors.border,
+              borderColor: rank <= 3 ? habitColor : Colors.border,
+              borderWidth: 1,
+              shadowColor: rank <= 3 ? habitColor : 'transparent',
+              shadowOpacity: rank <= 3 ? 0.3 : 0,
+              shadowRadius: rank <= 3 ? 8 : 0,
+              elevation: rank <= 3 ? 4 : 0,
             }]}>
               {/* Rank */}
               <View style={{ width: 28, alignItems: 'center' }}>
@@ -211,13 +249,16 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
               </View>
 
               {/* Color dot */}
-              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: habit.color }} />
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: resolveHabitColor(habit) }} />
 
               {/* Info */}
               <View style={{ flex: 1 }}>
-                <Text style={T.bodyMedium} numberOfLines={1}>{habit.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[1] }}>
+                  {s.isBadHabit && <Text style={{ fontSize: 12 }}>🛡️</Text>}
+                  <Text style={T.bodyMedium} numberOfLines={1}>{habit.name}</Text>
+                </View>
                 <View style={{ flexDirection: 'row', gap: Spacing[3], marginTop: 2 }}>
-                  <Text style={T.caption}>{Math.round(s.completionRate * 100)}% rate</Text>
+                  <Text style={T.caption}>{Math.round(s.completionRate * 100)}% {s.isBadHabit ? 'avoidance' : 'rate'}</Text>
                   {streak && streak.current > 0 && (
                     <Text style={T.caption}>🔥 {streak.current}d</Text>
                   )}
@@ -226,7 +267,7 @@ function HabitsTab({ onHabitPress }: { onHabitPress: (h: HabitWithLog) => void }
 
               {/* Score + progress */}
               <View style={{ alignItems: 'flex-end', gap: Spacing[1] }}>
-                <ProgressRing progress={s.score / 100} size={36} strokeWidth={4} color={habit.color} />
+                <ProgressRing progress={s.score / 100} size={36} strokeWidth={4} color={resolveHabitColor(habit)} />
                 <Text style={[T.xs, { color: Colors.textMuted }]}>{s.score}/100</Text>
               </View>
 
@@ -249,9 +290,9 @@ function MoodTab() {
     ? moodTimeline.reduce((s, m) => s + m.score, 0) / moodTimeline.length
     : 0;
 
-  const chartData = moodTimeline.slice(-14).map((m, i) => ({
+  const chartData = moodTimeline.map((m) => ({
     value: m.score,
-    label: i === 0 || i === moodTimeline.length - 1 ? m.date.slice(5) : '',
+    label: m.date.slice(5),
   }));
 
   // Mood distribution (how many days at each score)
@@ -285,10 +326,12 @@ function MoodTab() {
         <Animated.View entering={FadeInDown.delay(160).duration(350)}>
           <LineChart
             data={chartData}
-            title="Mood Trend — Last 14 Days"
+            title="Mood Trend (This Month)"
             min={1} max={10}
             color={Colors.info}
             height={140}
+            xAxisLabel="Date"
+            yAxisLabel="Mood Score"
           />
         </Animated.View>
       )}
@@ -339,7 +382,7 @@ function MoodTab() {
 // ── Patterns Tab ──────────────────────────────────────────────────────────────
 
 function PatternsTab() {
-  const { failurePatterns, weekdayStats } = useAnalyticsStore();
+  const { failurePatterns, badHabitFailurePatterns, customReasons, badHabitCustomReasons, weekdayStats } = useAnalyticsStore();
   const ac = useAccentColors();
 
   // Best and worst days
@@ -380,12 +423,12 @@ function PatternsTab() {
 
       {/* Failure analysis */}
       <Animated.View entering={FadeInDown.delay(240).duration(350)}>
-        <FailureAnalysisWidget />
+        <FailureAnalysisWidget patterns={failurePatterns} title="Why You Miss Habits" customReasons={customReasons} />
       </Animated.View>
 
       {/* Tips based on failure patterns */}
       {failurePatterns.length > 0 && (
-        <Animated.View entering={FadeInDown.delay(320).duration(350)} style={[Cards.elevated, { gap: Spacing[3] }]}>
+        <Animated.View entering={FadeInDown.delay(320).duration(350)} style={[Cards.elevated, { gap: Spacing[3], marginBottom: Spacing[4] }]}>
           <Text style={T.label}>💡 Personalized Tips</Text>
           {failurePatterns.slice(0, 3).map((p) => {
             const tip =
@@ -399,6 +442,35 @@ function PatternsTab() {
                 <View style={{
                   width: 6, height: 6, borderRadius: 3,
                   backgroundColor: ac.accent, marginTop: 7,
+                }} />
+                <Text style={[T.sm, { flex: 1, color: Colors.textSecondary, lineHeight: 20 }]}>{tip}</Text>
+              </View>
+            );
+          })}
+        </Animated.View>
+      )}
+
+      {/* Bad Habit Failure analysis */}
+      <Animated.View entering={FadeInDown.delay(400).duration(350)}>
+        <FailureAnalysisWidget patterns={badHabitFailurePatterns} isBadHabit={true} title="Why You Slip Up" customReasons={badHabitCustomReasons} />
+      </Animated.View>
+
+      {/* Tips based on bad habit patterns */}
+      {badHabitFailurePatterns.length > 0 && (
+        <Animated.View entering={FadeInDown.delay(480).duration(350)} style={[Cards.elevated, { gap: Spacing[3] }]}>
+          <Text style={T.label}>💡 Avoidance Strategies</Text>
+          {badHabitFailurePatterns.slice(0, 3).map((p) => {
+            const tip =
+              p.reason === 'urge' ? 'Try the "10-minute rule" — wait 10 minutes before giving in.' :
+                p.reason === 'stressed' ? 'Identify stress triggers and prepare alternative coping mechanisms.' :
+                  p.reason === 'bored' ? 'Keep a list of quick, positive activities ready for idle moments.' :
+                    p.reason === 'social_pressure' ? 'Prepare a script in advance for saying no in social situations.' :
+                      'Reflect on the environment that preceded this slip.';
+            return (
+              <View key={p.reason} style={{ flexDirection: 'row', gap: Spacing[3], alignItems: 'flex-start' }}>
+                <View style={{
+                  width: 6, height: 6, borderRadius: 3,
+                  backgroundColor: Colors.danger, marginTop: 7,
                 }} />
                 <Text style={[T.sm, { flex: 1, color: Colors.textSecondary, lineHeight: 20 }]}>{tip}</Text>
               </View>
@@ -472,10 +544,10 @@ export default function InsightsScreen() {
         {activeTab === 'habits' && (
           <HabitsTab onHabitPress={(h) => router.push(`/habit/${h.id}` as any)} />
         )}
+        {activeTab === 'goals' && <GoalsTab />}
         {activeTab === 'mood' && <MoodTab />}
         {activeTab === 'patterns' && <PatternsTab />}
       </ScrollView>
-
     </SafeAreaView>
   );
 }

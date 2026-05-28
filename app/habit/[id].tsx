@@ -7,13 +7,18 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { useHabitStore } from '@store/useHabitStore';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
+import { getCompletionWeight } from '@src/utils/analytics';
 import { HabitDetail } from '@src/components/insights/HabitPerformanceSheet';
 import { Layout, Cards, Buttons, Text as T } from '@design/components';
 import { Colors, Spacing } from '@design/tokens';
-import { archiveHabit, deleteHabit, getHabitById, unarchiveHabit } from '@services/habitService';
+import { getHabitById, archiveHabit, deleteHabit, unarchiveHabit } from '@services/habitService';
+import { getLogsForHabit } from '@services/logService';
 import { HabitForm, type HabitFormRef } from '@src/components/habits/HabitForm';
-import type { HabitWithLog } from '@src/types';
+import type { HabitWithLog, FailurePattern } from '@src/types';
 import { useAccentColors } from '@/hooks/use-accent-colors';
+import { useHabitColor } from '@/hooks/use-habit-color';
+import { FailureAnalysisWidget } from '@src/components/insights/FailureAnalysisWidget';
+import { analyzeFailurePatterns } from '@src/utils/analytics';
 
 export default function HabitDashboardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,6 +34,11 @@ export default function HabitDashboardScreen() {
   
   const [localHabit, setLocalHabit] = React.useState<HabitWithLog | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [failurePatterns, setFailurePatterns] = React.useState<FailurePattern[]>([]);
+  const [customReasons, setCustomReasons] = React.useState<{text: string, count: number}[]>([]);
+
+  const rawHabitColor = useHabitColor(localHabit?.categoryId ?? null);
+  const habitColor = localHabit?.isBadHabit ? Colors.danger : (rawHabitColor || ac.accent);
 
   React.useEffect(() => {
     async function load() {
@@ -46,13 +56,34 @@ export default function HabitDashboardScreen() {
         const scoreObj = strengthScores.find((s) => s.habitId === h.id);
         const streak = scoreObj?.streak ?? { current: 0, longest: 0, lastCompletedDate: null };
         const strengthScore = scoreObj?.score ?? 0;
+        const isCompleted = !!todayLog?.completedAt;
+        const weight = getCompletionWeight(h, todayLog);
         setLocalHabit({
           ...h,
           todayLog,
-          isCompleted: !!todayLog?.completedAt,
+          isCompleted,
+          contributesToProgress: weight === 1,
+          completionWeight: weight,
           streak,
           strengthScore,
         });
+
+        // Compute local failure patterns
+        const logs = await getLogsForHabit(h.id);
+        setFailurePatterns(analyzeFailurePatterns(logs));
+        
+        // Extract custom 'Other' texts
+        const customLogs = logs.filter(l => l.failureReason === 'custom' && l.failureCustomText && l.failureCustomText.trim().length > 0);
+        const counts = new Map<string, { text: string, count: number }>();
+        for (const l of customLogs) {
+          const text = l.failureCustomText.trim();
+          const key = text.toLowerCase();
+          if (!counts.has(key)) {
+            counts.set(key, { text, count: 0 });
+          }
+          counts.get(key)!.count += 1;
+        }
+        setCustomReasons(Array.from(counts.values()).sort((a, b) => b.count - a.count));
       }
       setLoading(false);
     }
@@ -122,13 +153,22 @@ export default function HabitDashboardScreen() {
         </TouchableOpacity>
         <Text style={[T.h3, { flex: 1 }]} numberOfLines={1}>Habit Dashboard</Text>
         <TouchableOpacity onPress={() => formRef.current?.openEdit(localHabit)} style={Buttons.icon}>
-          <Ionicons name="pencil" size={20} color={ac.accent} />
+          <Ionicons name="pencil" size={20} color={habitColor} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: Spacing[5], paddingBottom: Spacing[24] }} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(400)}>
           <HabitDetail habit={localHabit} />
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(100).duration(400)} style={{ marginTop: Spacing[4] }}>
+          <FailureAnalysisWidget 
+            patterns={failurePatterns} 
+            isBadHabit={localHabit.isBadHabit} 
+            title={localHabit.isBadHabit ? "Why You Slip Up" : "Why You Miss This Habit"}
+            customReasons={customReasons}
+          />
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)} style={{ marginTop: Spacing[6], gap: Spacing[3] }}>

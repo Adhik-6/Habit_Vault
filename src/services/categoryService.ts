@@ -2,6 +2,7 @@ import { getDb } from '../db/database';
 import type { SQLiteBindValue } from 'expo-sqlite';
 import type { Category } from '../types';
 import { generateId } from '../utils/idUtils';
+import { BAD_HABITS_CATEGORY_ID } from '../db/schema';
 
 // ── Row mapper ──────────────────────────────────────────────────────────────
 
@@ -59,6 +60,10 @@ export async function updateCategory(
   id: string,
   input: Partial<Omit<Category, 'id' | 'createdAt'>>,
 ): Promise<void> {
+  // Block editing system categories
+  if (id === BAD_HABITS_CATEGORY_ID) {
+    throw new Error('Cannot edit the system "Bad Habits" category.');
+  }
   const db = await getDb();
   const fields: string[] = [];
   const values: SQLiteBindValue[] = [];
@@ -74,6 +79,10 @@ export async function updateCategory(
 }
 
 export async function deleteCategory(id: string): Promise<void> {
+  // Block deleting system categories
+  if (id === BAD_HABITS_CATEGORY_ID) {
+    throw new Error('Cannot delete the system "Bad Habits" category.');
+  }
   const db = await getDb();
   // Habits in this category have categoryId set to NULL via ON DELETE SET NULL
   await db.runAsync('DELETE FROM categories WHERE id = ?', [id]);

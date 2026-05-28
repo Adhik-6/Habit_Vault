@@ -14,6 +14,7 @@ import { useHabitStore } from '@store/useHabitStore';
 import { filterHabitsForDate } from '@src/services/habitService';
 import { getLogsForDate } from '@src/services/logService';
 import { todayString } from '@src/utils/dateUtils';
+import { getCompletionWeight } from '@src/utils/analytics';
 
 import { LineChart, WeekdayBarChart } from '@src/components/charts/Charts';
 import { DashboardGrid, type WidgetId } from '@src/components/dashboard/DashboardGrid';
@@ -21,6 +22,7 @@ import { HeatmapWidget } from '@src/components/dashboard/widgets/HeatmapWidget';
 import { StreakWidget } from '@src/components/dashboard/widgets/StreakWidget';
 import { StrengthScoreWidget } from '@src/components/dashboard/widgets/StrengthScoreWidget';
 import { CategoryAnalysisWidget } from '@src/components/dashboard/widgets/CategoryAnalysisWidget';
+import { InsightRow } from '@src/components/insights/InsightRow';
 
 import { Cards, Layout, Text as T } from '@design/components';
 import { Colors, Spacing, Radius } from '@design/tokens';
@@ -47,41 +49,9 @@ function InsightsWidget() {
   return (
     <View style={[Cards.base, { marginBottom: Spacing[4] }]}>
       <Text style={[T.label, { marginBottom: Spacing[3] }]}>Auto Insights</Text>
-      {insights.slice(0, 5).map((insight, i) => {
-        const iconName =
-          insight.type === 'improving' ? 'trending-up' :
-            insight.type === 'declining' ? 'trending-down' :
-              insight.type === 'streak_risk' ? 'flame-outline' :
-                insight.type === 'worst_day' ? 'warning-outline' : 'bulb-outline';
-
-        const iconColor =
-          insight.type === 'improving' ? Colors.success :
-            insight.type === 'declining' ? Colors.danger :
-              insight.type === 'streak_risk' ? Colors.warning : ac.accent;
-
-        return (
-          <View
-            key={i}
-            style={{
-              flexDirection: 'row', alignItems: 'flex-start', gap: Spacing[3],
-              paddingVertical: Spacing[2],
-              borderBottomWidth: i < insights.length - 1 ? 1 : 0,
-              borderBottomColor: Colors.border,
-            }}
-          >
-            <View style={{
-              width: 28, height: 28, borderRadius: Radius.md,
-              backgroundColor: iconColor + '22',
-              alignItems: 'center', justifyContent: 'center', marginTop: 1,
-            }}>
-              <Ionicons name={iconName as any} size={15} color={iconColor} />
-            </View>
-            <Text style={[T.sm, { flex: 1, color: Colors.text, lineHeight: 20 }]}>
-              {insight.message}
-            </Text>
-          </View>
-        );
-      })}
+      {insights.slice(0, 5).map((insight, i) => (
+        <InsightRow key={i} insight={insight} isLast={i === Math.min(insights.length, 5) - 1} />
+      ))}
     </View>
   );
 }
@@ -94,27 +64,16 @@ export default function DashboardScreen() {
   const globalScore = useAnalyticsStore((s) => s.globalScore);
   const habits = useHabitStore((s) => s.habits);
 
-  const [todayCompleted, setTodayCompleted] = React.useState(0);
-  const [todayTotal, setTodayTotal] = React.useState(0);
-
-  React.useEffect(() => {
-    async function fetchTodayStats() {
-      const today = todayString();
-      const scheduled = filterHabitsForDate(habits, today);
-      const logs = await getLogsForDate(today);
-      const completed = logs.filter(l => l.completedAt).length;
-      setTodayTotal(scheduled.length);
-      setTodayCompleted(completed);
-    }
-    fetchTodayStats();
-  }, [habits]);
+  const habitsForDate = useHabitsForSelectedDate();
+  const todayTotal = habitsForDate.length;
+  const todayCompleted = habitsForDate.reduce((sum, h) => sum + h.completionWeight, 0);
 
   // Mood line chart data
   const moodChartData = useMemo(
     () =>
-      moodTimeline.slice(-14).map((m, i) => ({
+      moodTimeline.map((m) => ({
         value: m.score,
-        label: i === 0 || i === moodTimeline.length - 1 ? m.date.slice(5) : '',
+        label: m.date.slice(5),
       })),
     [moodTimeline],
   );
@@ -132,7 +91,8 @@ export default function DashboardScreen() {
           <WeekdayBarChart
             key={id}
             data={weekdayStats}
-            title="Weekday Performance"
+            title="Completion by Weekday"
+            info="Average daily completion rate this month."
           />
         );
       case 'mood_trend':
@@ -140,10 +100,12 @@ export default function DashboardScreen() {
           <LineChart
             key={id}
             data={moodChartData}
-            title="Mood Trend (14 days)"
+            title="Mood Trend (This Month)"
             min={1}
             max={10}
             color={Colors.info}
+            xAxisLabel="Date"
+            yAxisLabel="Mood Score"
           />
         ) : (
           <View key={id} style={[Cards.base, { marginBottom: Spacing[4], alignItems: 'center', paddingVertical: Spacing[6] }]}>

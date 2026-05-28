@@ -16,9 +16,20 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
-import { AppState, StatusBar } from 'react-native'; // <-- Added AppState here
+import { AppState, StatusBar, LogBox } from 'react-native'; // <-- Added AppState here
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+LogBox.ignoreLogs(['expo-notifications: Android Push notifications']);
+
+// Silence the expo-notifications error explicitly
+const originalConsoleError = console.error;
+console.error = (...args) => {
+  if (typeof args[0] === 'string' && args[0].includes('expo-notifications: Android Push notifications')) {
+    return;
+  }
+  originalConsoleError(...args);
+};
 
 // Keep splash visible until fonts + DB are ready
 SplashScreen.preventAutoHideAsync();
@@ -116,7 +127,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider value={AppTheme}>
           <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
-          <Stack screenOptions={{ headerShown: false }}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.background } }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
               name="modal"

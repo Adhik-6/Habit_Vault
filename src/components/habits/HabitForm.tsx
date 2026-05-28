@@ -1,7 +1,7 @@
 import { Buttons, Cards, Inputs, Text as T } from '@design/components';
 import { Colors, Spacing } from '@design/tokens';
 import { Ionicons } from '@expo/vector-icons';
-import { createHabit, updateHabit } from '@services/habitService';
+import { createHabit, updateHabit, BAD_HABITS_CATEGORY_ID } from '@services/habitService';
 import { BottomSheet, type BottomSheetRef } from '@src/components/common/BottomSheet';
 import type { CompositeStep, FrequencyRule, Habit, HabitType } from '@src/types';
 import { generateId } from '@src/utils/idUtils';
@@ -20,7 +20,6 @@ import {
 const TYPES: { value: HabitType; label: string; icon: string; hint: string }[] = [
   { value: 'boolean', label: 'Done/Not Done', icon: 'checkmark-circle-outline', hint: 'Simple yes/no completion' },
   { value: 'quantity', label: 'Measurable', icon: 'bar-chart-outline', hint: 'Track a quantity with a target' },
-  { value: 'duration', label: 'Duration', icon: 'timer-outline', hint: 'Track time spent on a habit' },
   { value: 'composite', label: 'Checklist', icon: 'list-outline', hint: 'Multiple steps to complete' },
   { value: 'counter', label: 'Counter', icon: 'add-circle-outline', hint: 'Count anything — no target needed' },
 ];
@@ -32,11 +31,13 @@ interface FormState {
   description: string;
   type: HabitType;
   targetValue: string;
+  stepValue: string;
   unit: string;
   frequencyType: 'daily' | 'weekly';
   selectedDays: number[];
   compositeSteps: CompositeStep[];
   categoryId: string | null;
+  isBadHabit: boolean;
 }
 
 function defaultForm(): FormState {
@@ -45,11 +46,13 @@ function defaultForm(): FormState {
     description: '',
     type: 'boolean',
     targetValue: '1',
+    stepValue: '1',
     unit: '',
     frequencyType: 'daily',
     selectedDays: [1, 2, 3, 4, 5],
     compositeSteps: [],
     categoryId: null,
+    isBadHabit: false,
   };
 }
 
@@ -59,11 +62,13 @@ function habitToForm(habit: Habit): FormState {
     description: habit.description,
     type: habit.type,
     targetValue: String(habit.targetValue),
+    stepValue: String(habit.stepValue ?? 1),
     unit: habit.unit,
     frequencyType: habit.frequencyRules.type === 'daily' ? 'daily' : 'weekly',
     selectedDays: habit.frequencyRules.daysOfWeek ?? [1, 2, 3, 4, 5],
     compositeSteps: habit.compositeSteps,
     categoryId: habit.categoryId,
+    isBadHabit: habit.isBadHabit,
   };
 }
 
@@ -142,9 +147,11 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
             ? { type: 'daily' }
             : { type: 'weekly', daysOfWeek: form.selectedDays };
 
+        const finalCategoryId = form.categoryId === BAD_HABITS_CATEGORY_ID ? null : form.categoryId;
+
         // Color is derived from the selected category; fallback to the user's accent color
-        const categoryColor = form.categoryId
-          ? (categories.find((c) => c.id === form.categoryId)?.color ?? ac.accent)
+        const categoryColor = finalCategoryId
+          ? (categories.find((c) => c.id === finalCategoryId)?.color ?? ac.accent)
           : ac.accent;
 
         const payload: any = {
@@ -152,11 +159,13 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
           description: form.description.trim(),
           type: form.type,
           targetValue: parseFloat(form.targetValue) || 1,
+          stepValue: parseFloat(form.stepValue) || 1,
           unit: form.unit.trim(),
           color: categoryColor,
           frequencyRules,
           compositeSteps: form.compositeSteps,
-          categoryId: form.categoryId,
+          categoryId: finalCategoryId,
+          isBadHabit: form.isBadHabit,
         };
 
         if (editingId) {
@@ -248,12 +257,39 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
             </Text>
           </View>
 
-          {/* Target value + unit (quantity / duration only — counter has no target) */}
-          {(form.type === 'quantity' || form.type === 'duration') && (
+          {/* Bad Habit Toggle */}
+          <View style={[Cards.compact, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+            <View style={{ flex: 1, paddingRight: Spacing[3] }}>
+              <Text style={[T.bodyMedium, { color: form.isBadHabit ? Colors.danger : Colors.text }]}>
+                {form.isBadHabit ? '🛡️ Bad Habit Tracking' : 'Track as Bad Habit'}
+              </Text>
+              <Text style={[T.caption, { color: Colors.textDim, marginTop: 2 }]}>
+                {form.isBadHabit 
+                  ? 'Your score improves when you avoid doing this.' 
+                  : 'Toggle if you want to break this habit rather than build it.'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => update({ isBadHabit: !form.isBadHabit })}
+              style={{
+                width: 44, height: 24, borderRadius: 12,
+                backgroundColor: form.isBadHabit ? Colors.danger : Colors.surfaceElevated,
+                justifyContent: 'center', paddingHorizontal: 2,
+              }}
+            >
+              <View style={{
+                width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff',
+                transform: [{ translateX: form.isBadHabit ? 20 : 0 }],
+              }} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Target value, step value, and unit (quantity only) */}
+          {form.type === 'quantity' && (
             <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
               <View style={{ flex: 1 }}>
                 <Text style={[T.label, { marginBottom: Spacing[2] }]}>
-                  {form.type === 'duration' ? 'Target (minutes)' : 'Target amount'}
+                  Target amount
                 </Text>
                 <TextInput
                   style={Inputs.base}
@@ -264,18 +300,16 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
                   placeholderTextColor={Colors.textDim}
                 />
               </View>
-              {form.type === 'quantity' && (
-                <View style={{ flex: 1 }}>
-                  <Text style={[T.label, { marginBottom: Spacing[2] }]}>Unit</Text>
-                  <TextInput
-                    style={Inputs.base}
-                    value={form.unit}
-                    onChangeText={(unit) => update({ unit })}
-                    placeholder="ml, pages, km…"
-                    placeholderTextColor={Colors.textDim}
-                  />
-                </View>
-              )}
+              <View style={{ flex: 1 }}>
+                <Text style={[T.label, { marginBottom: Spacing[2] }]}>Unit</Text>
+                <TextInput
+                  style={Inputs.base}
+                  value={form.unit}
+                  onChangeText={(unit) => update({ unit })}
+                  placeholder="ml, pages, km…"
+                  placeholderTextColor={Colors.textDim}
+                />
+              </View>
             </View>
           )}
 
@@ -354,8 +388,8 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
           </View>
 
 
-          {/* Category assignment */}
-          {categories.length > 0 && (
+          {/* Category assignment (Hidden if bad habit) */}
+          {categories.length > 0 && !form.isBadHabit && (
             <View>
               <Text style={[T.label, { marginBottom: Spacing[2] }]}>Category (optional)</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing[2] }}>
@@ -368,18 +402,21 @@ export const HabitForm = React.forwardRef<HabitFormRef, HabitFormProps>(
                 >
                   <Text style={[T.sm, { color: form.categoryId === null ? ac.accentGlow : Colors.textMuted }]}>None</Text>
                 </TouchableOpacity>
-                {categories.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    onPress={() => update({ categoryId: c.id })}
-                    style={[Cards.compact, {
-                      borderColor: form.categoryId === c.id ? ac.accent : Colors.border,
-                      backgroundColor: form.categoryId === c.id ? ac.accentMuted : Colors.surface,
-                    }]}
-                  >
-                    <Text style={[T.sm, { color: form.categoryId === c.id ? ac.accentGlow : Colors.textSecondary }]}>{c.name}</Text>
-                  </TouchableOpacity>
-                ))}
+                {categories.map((c) => {
+                  if (c.id === BAD_HABITS_CATEGORY_ID) return null;
+                  return (
+                    <TouchableOpacity
+                      key={c.id}
+                      onPress={() => update({ categoryId: c.id })}
+                      style={[Cards.compact, {
+                        borderColor: form.categoryId === c.id ? ac.accent : Colors.border,
+                        backgroundColor: form.categoryId === c.id ? ac.accentMuted : Colors.surface,
+                      }]}
+                    >
+                      <Text style={[T.sm, { color: form.categoryId === c.id ? ac.accentGlow : Colors.textSecondary }]}>{c.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           )}

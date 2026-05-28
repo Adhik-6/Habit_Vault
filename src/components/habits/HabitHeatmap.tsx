@@ -59,6 +59,9 @@ function buildProgressDetail(day: DayIntensity, habit: Habit): {
 } {
   switch (habit.type) {
     case 'boolean':
+      if (habit.isBadHabit) {
+        return { primary: day.rawValue ? '⚠️ Triggered' : '✓ Clean day' };
+      }
       return { primary: day.rawValue ? '✓ Completed' : '✗ Not done' };
 
     case 'quantity': {
@@ -71,15 +74,7 @@ function buildProgressDetail(day: DayIntensity, habit: Habit): {
       };
     }
 
-    case 'duration': {
-      const totalSec = day.rawValue ?? 0;
-      const mins = Math.round(totalSec / 60);
-      const target = habit.targetValue;
-      return {
-        primary: `${mins} min logged`,
-        secondary: `Target: ${target} min (${Math.round(day.completionRate * 100)}%)`,
-      };
-    }
+
 
     case 'composite': {
       const progress = day.compositeProgress ?? {};
@@ -120,7 +115,7 @@ interface CellProps {
   onPress: (day: DayIntensity) => void;
 }
 
-function HeatmapCell({ day, isToday, habitColor, tiers, onPress }: CellProps) {
+function HeatmapCellComponent({ day, isToday, habitColor, tiers, onPress }: CellProps) {
   const bg = tiers[day.intensityTier] ?? tiers[0];
   return (
     <TouchableOpacity
@@ -139,6 +134,10 @@ function HeatmapCell({ day, isToday, habitColor, tiers, onPress }: CellProps) {
   );
 }
 
+const HeatmapCell = React.memo(HeatmapCellComponent, (prev, next) => {
+  return prev.day === next.day && prev.isToday === next.isToday && prev.habitColor === next.habitColor;
+});
+
 // ── Tooltip modal ─────────────────────────────────────────────────────────────
 
 interface TooltipProps {
@@ -152,6 +151,7 @@ function DayTooltip({ day, habit, habitColor, onClose }: TooltipProps) {
   if (!day) return null;
   const isToday = day.date === todayString();
   const detail = buildProgressDetail(day, habit);
+  const color = habit.isBadHabit ? Colors.danger : habitColor;
 
   return (
     <Modal transparent animationType="none" onRequestClose={onClose}>
@@ -181,7 +181,7 @@ function DayTooltip({ day, habit, habitColor, onClose }: TooltipProps) {
         >
           {/* Header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2], marginBottom: Spacing[3] }}>
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: habitColor }} />
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />
             <Text style={[T.bodyMedium, { flex: 1 }]}>
               {formatDate(day.date)}{isToday ? '  •  Today' : ''}
             </Text>
@@ -192,22 +192,22 @@ function DayTooltip({ day, habit, habitColor, onClose }: TooltipProps) {
 
           {/* Primary metric */}
           <View style={{
-            backgroundColor: habitColor + '18', borderRadius: Radius.md,
+            backgroundColor: color + '18', borderRadius: Radius.md,
             padding: Spacing[3], marginBottom: Spacing[2],
           }}>
-            <Text style={[T.h3, { color: habitColor, textAlign: 'center' }]}>{detail.primary}</Text>
+            <Text style={[T.h3, { color, textAlign: 'center' }]}>{detail.primary}</Text>
             {detail.secondary && (
               <Text style={[T.caption, { textAlign: 'center', marginTop: 2 }]}>{detail.secondary}</Text>
             )}
           </View>
 
           {/* Progress bar (non-counter, non-boolean) */}
-          {(habit.type === 'quantity' || habit.type === 'duration' || habit.type === 'composite') && (
+          {(habit.type === 'quantity' || habit.type === 'composite') && (
             <View style={{ backgroundColor: Colors.border, height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: Spacing[2] }}>
               <View style={{
                 width: `${Math.round(day.completionRate * 100)}%`,
                 height: 6,
-                backgroundColor: day.completionRate >= 1 ? Colors.success : habitColor,
+                backgroundColor: day.completionRate >= 1 ? (habit.isBadHabit ? Colors.danger : Colors.success) : color,
                 borderRadius: 3,
               }} />
             </View>
@@ -221,7 +221,7 @@ function DayTooltip({ day, habit, habitColor, onClose }: TooltipProps) {
                   <Ionicons
                     name={s.done ? 'checkmark-circle' : 'ellipse-outline'}
                     size={14}
-                    color={s.done ? habitColor : Colors.textDim}
+                    color={s.done ? color : Colors.textDim}
                   />
                   <Text style={[T.xs, { flex: 1, color: s.done ? Colors.text : Colors.textDim,
                     textDecorationLine: s.done ? 'line-through' : 'none' }]}>
@@ -236,9 +236,9 @@ function DayTooltip({ day, habit, habitColor, onClose }: TooltipProps) {
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
             <View style={{
               paddingHorizontal: Spacing[2], paddingVertical: 2,
-              backgroundColor: habitColor + '22', borderRadius: Radius.sm,
+              backgroundColor: color + '22', borderRadius: Radius.sm,
             }}>
-              <Text style={[T.xs, { color: habitColor }]}>
+              <Text style={[T.xs, { color }]}>
                 {day.intensityTier === 0 ? '◦ None'
                   : day.intensityTier === 1 ? '▪ Low'
                   : day.intensityTier === 2 ? '▪▪ Medium'
@@ -267,9 +267,10 @@ export function HabitHeatmap({ habit, habitColor }: HabitHeatmapProps) {
   const [selectedDay, setSelectedDay] = useState<DayIntensity | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const today = todayString();
+  const effectiveColor = habit.isBadHabit ? Colors.danger : habitColor;
 
-  // Build color tiers from the habit's own color
-  const tiers = buildTiers(habitColor);
+  // Build color tiers from the habit's own color (or red for bad habits)
+  const tiers = buildTiers(effectiveColor);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -400,7 +401,7 @@ export function HabitHeatmap({ habit, habitColor }: HabitHeatmapProps) {
                         key={day.date}
                         day={day}
                         isToday={day.date === today}
-                        habitColor={habitColor}
+                        habitColor={effectiveColor}
                         tiers={tiers}
                         onPress={handleCellPress}
                       />
@@ -420,19 +421,19 @@ export function HabitHeatmap({ habit, habitColor }: HabitHeatmapProps) {
 
       {/* Legend — uses habitColor tiers */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[1], marginTop: Spacing[2], paddingLeft: DAY_LABEL_W }}>
-        <Text style={[T.xs, { color: Colors.textDim }]}>Less</Text>
-        {tiers.map((color, i) => (
+        <Text style={[T.xs, { color: Colors.textDim }]}>{habit.isBadHabit ? 'Clean' : 'Less'}</Text>
+        {tiers.map((c, i) => (
           <View
             key={i}
             style={{
               width: CELL_SIZE, height: CELL_SIZE, borderRadius: 3,
-              backgroundColor: color,
+              backgroundColor: c,
               borderWidth: i === 0 ? 1 : 0,
               borderColor: Colors.border,
             }}
           />
         ))}
-        <Text style={[T.xs, { color: Colors.textDim }]}>More</Text>
+        <Text style={[T.xs, { color: Colors.textDim }]}>{habit.isBadHabit ? 'Relapsed' : 'More'}</Text>
       </View>
 
       {/* Tooltip modal */}

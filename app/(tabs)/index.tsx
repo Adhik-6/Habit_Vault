@@ -5,15 +5,20 @@ import {
   Alert, KeyboardAvoidingView, Platform, ScrollView,
   Text,
   TouchableOpacity,
-  View
+  Pressable,
+  View,
+  TextInput,
+  Keyboard,
+  StyleSheet
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useCategoriesWithHabits, useHabitsForSelectedDate, useUncategorizedHabits } from '@/hooks/use-habits-for-date';
 import { useAccentColors } from '@/hooks/use-accent-colors';
 import { archiveHabit, deleteHabit } from '@services/habitService';
-import type { CategoryWithHabits, HabitWithLog } from '@src/types';
+import type { CategoryWithHabits, HabitWithLog, GoodHabitFailureReason } from '@src/types';
 import { useHabitStore } from '@store/useHabitStore';
 import { useMoodStore } from '@store/useMoodStore';
 
@@ -30,11 +35,50 @@ import {
   formatDisplayDate,
   todayString
 } from '@src/utils/dateUtils';
+import { BAD_HABITS_CATEGORY_ID } from '@services/habitService';
+
+
+// ── Celebration Banner ──────────────────────────────────────────────────────────
+function CelebrationBanner({
+  isBadHabit,
+  color,
+  text,
+}: {
+  isBadHabit?: boolean;
+  color: string;
+  text: string;
+}) {
+  if (isBadHabit) {
+    return (
+      <Animated.View entering={ZoomIn.duration(300)}>
+        <LinearGradient
+          colors={['#1A1A2E', color + '33']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[Cards.accentBorder, { borderColor: color, shadowColor: color, alignItems: 'center', paddingVertical: Spacing[3], flexDirection: 'row', justifyContent: 'center', gap: Spacing[2] }]}
+        >
+          <Text style={{ fontSize: 20 }}>🛡️</Text>
+          <Text style={[T.bodyMedium, { color }]}>{text}</Text>
+        </LinearGradient>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View entering={ZoomIn.duration(300)}>
+      <View style={[Cards.accentBorder, { borderColor: color, shadowColor: color, alignItems: 'center', paddingVertical: Spacing[3], flexDirection: 'row', justifyContent: 'center', gap: Spacing[2] }]}>
+        <Text style={{ fontSize: 20 }}>🎉</Text>
+        <Text style={[T.bodyMedium, { color }]}>{text}</Text>
+      </View>
+    </Animated.View>
+  );
+}
 
 // ── Category Section ─────────────────────────────────────────────────────────────
-function CategorySection({ category, onLongPressHabit }: {
+function CategorySection({ category, onLongPressHabit, onLogReason }: {
   category: CategoryWithHabits;
   onLongPressHabit: (h: HabitWithLog) => void;
+  onLogReason: (habitId: string) => void;
 }) {
   const pct = category.totalCount > 0 ? category.completedCount / category.totalCount : 0;
   const ac = useAccentColors();
@@ -44,15 +88,27 @@ function CategorySection({ category, onLongPressHabit }: {
       {/* Category header */}
       <View style={[Layout.spaceBetween, { marginBottom: Spacing[3] }]}>
         <View style={Layout.row}>
-          <View style={{
-            width: 10, height: 10, borderRadius: 5,
-            backgroundColor: category.color, marginRight: Spacing[2],
-          }} />
+          {category.id === BAD_HABITS_CATEGORY_ID ? (
+            <LinearGradient
+              colors={['#1A1A2E', Colors.danger]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                width: 10, height: 10, borderRadius: 5,
+                marginRight: Spacing[2],
+              }}
+            />
+          ) : (
+            <View style={{
+              width: 10, height: 10, borderRadius: 5,
+              backgroundColor: category.color, marginRight: Spacing[2],
+            }} />
+          )}
           <Text style={T.h3}>{category.name}</Text>
         </View>
         <View style={Layout.row}>
           <Text style={[T.caption, { marginRight: Spacing[2] }]}>
-            {category.completedCount}/{category.totalCount}
+            {Number(category.completedCount.toFixed(1))}/{category.totalCount}
           </Text>
           <Text style={[T.xs, {
             color: pct === 1 ? Colors.success : Colors.textMuted,
@@ -64,15 +120,16 @@ function CategorySection({ category, onLongPressHabit }: {
 
       {/* Habits */}
       {category.habits.map((habit) => (
-        <HabitCard key={habit.id} habit={habit} onLongPress={onLongPressHabit} />
+        <HabitCard key={habit.id} habit={habit} onLongPress={onLongPressHabit} onLogReason={onLogReason} />
       ))}
 
       {/* Category complete banner — uses the category's own color, not accent */}
       {pct === 1 && category.totalCount > 0 && (
-        <Animated.View entering={ZoomIn.duration(300)} style={[Cards.accentBorder, { borderColor: category.color, shadowColor: category.color }, { alignItems: 'center', paddingVertical: Spacing[3], flexDirection: 'row', justifyContent: 'center', gap: Spacing[2] }]}>
-          <Text style={{ fontSize: 20 }}>🎉</Text>
-          <Text style={[T.bodyMedium, { color: category.color }]}>{category.name} complete!</Text>
-        </Animated.View>
+        <CelebrationBanner
+          isBadHabit={category.id === BAD_HABITS_CATEGORY_ID}
+          color={category.id === BAD_HABITS_CATEGORY_ID ? Colors.danger : category.color}
+          text={category.id === BAD_HABITS_CATEGORY_ID ? `Clean day for ${category.name}!` : `${category.name} complete!`}
+        />
       )}
     </View>
   );
@@ -215,15 +272,173 @@ function HabitContextMenu({
   );
 }
 
+// ── Log Reason Sheet ─────────────────────────────────────────────────────────
+function LogReasonSheet({
+  habitId,
+  sheetRef,
+}: {
+  habitId: string | null;
+  sheetRef: React.RefObject<BottomSheetRef>;
+}) {
+  const habit = useHabitStore((s) => s.habits.find(h => h.id === habitId));
+  const isBad = habit?.isBadHabit ?? false;
+  const log = habitId ? useHabitStore((s) => s.todayLogsMap.get(habitId)) : null;
+  const [reason, setReason] = React.useState<any | null>(null);
+  const [customText, setCustomText] = React.useState('');
+
+  React.useEffect(() => {
+    if (log) {
+      setReason(log.failureReason ?? null);
+      setCustomText(log.failureCustomText ?? '');
+    } else {
+      setReason(null);
+      setCustomText('');
+    }
+  }, [habitId, log?.failureReason, log?.failureCustomText]);
+  const logHabitReason = useHabitStore((s) => s.logHabitReason);
+  const ac = useAccentColors();
+
+  const GOOD_REASONS = [
+    { value: 'tired', label: 'Too tired', icon: 'battery-dead-outline' },
+    { value: 'busy', label: 'Too busy', icon: 'time-outline' },
+    { value: 'forgot', label: 'Forgot', icon: 'help-outline' },
+    { value: 'lazy', label: 'Procrastinated', icon: 'cafe-outline' },
+    { value: 'custom', label: 'Other', icon: 'create-outline' },
+  ];
+
+  const BAD_REASONS = [
+    { value: 'urge', label: 'Strong Urge', icon: 'flame-outline' },
+    { value: 'stressed', label: 'Stressed', icon: 'pulse-outline' },
+    { value: 'bored', label: 'Bored', icon: 'hourglass-outline' },
+    { value: 'social_pressure', label: 'Social Pressure', icon: 'people-outline' },
+    { value: 'custom', label: 'Other', icon: 'create-outline' },
+  ];
+
+  const REASONS = isBad ? BAD_REASONS : GOOD_REASONS;
+
+  const handleSave = async () => {
+    if (!habitId || !reason) return;
+    await logHabitReason(habitId, reason, reason === 'custom' ? customText : undefined);
+    sheetRef.current?.close();
+    setReason(null);
+    setCustomText('');
+  };
+
+  return (
+    <View style={{ gap: Spacing[4], paddingBottom: Spacing[8] }}>
+      <Text style={[T.bodyMedium, { color: Colors.textSecondary }]}>
+        {isBad ? 'Why did you slip up?' : 'Why did you miss this habit?'}
+      </Text>
+      
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing[2] }}>
+        {REASONS.map((r) => (
+          <TouchableOpacity
+            key={r.value}
+            onPress={() => setReason(r.value)}
+            style={[{ borderRadius: Radius.full, overflow: 'hidden' }, isBad ? {} : {
+              flexDirection: 'row', alignItems: 'center', gap: Spacing[2],
+              paddingVertical: Spacing[2], paddingHorizontal: Spacing[3],
+              borderWidth: 1,
+              borderColor: reason === r.value ? ac.accent : Colors.border,
+              backgroundColor: reason === r.value ? ac.accentMuted : 'transparent',
+            }]}
+          >
+            {isBad && reason === r.value ? (
+              <LinearGradient
+                colors={['#000000', Colors.danger]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2], paddingVertical: Spacing[2], paddingHorizontal: Spacing[3], borderRadius: Radius.full }}
+              >
+                <Ionicons name={r.icon as any} size={16} color="#fff" />
+                <Text style={[T.sm, { color: '#fff' }]}>{r.label}</Text>
+              </LinearGradient>
+            ) : isBad ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2], paddingVertical: Spacing[2], paddingHorizontal: Spacing[3], borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.full }}>
+                <Ionicons name={r.icon as any} size={16} color={Colors.textMuted} />
+                <Text style={[T.sm, { color: Colors.textMuted }]}>{r.label}</Text>
+              </View>
+            ) : (
+              <>
+                <Ionicons name={r.icon as any} size={16} color={reason === r.value ? ac.accentGlow : Colors.textMuted} />
+                <Text style={[T.sm, { color: reason === r.value ? ac.accentGlow : Colors.textMuted }]}>{r.label}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {reason === 'custom' && (
+        <TextInput
+          style={[Cards.base, T.body, { padding: Spacing[3], color: Colors.text, backgroundColor: Colors.surfaceElevated }]}
+          placeholder="Explain what happened..."
+          placeholderTextColor={Colors.textMuted}
+          value={customText}
+          onChangeText={setCustomText}
+          autoFocus
+          onSubmitEditing={Keyboard.dismiss}
+        />
+      )}
+
+      <Pressable
+        onPress={handleSave}
+        disabled={!reason || (reason === 'custom' && !customText.trim())}
+        style={{ marginTop: Spacing[2], borderRadius: Radius.lg, overflow: 'hidden' }}
+      >
+        {({ pressed }) => (
+          <>
+            {(!reason || (reason === 'custom' && !customText.trim())) ? (
+               isBad ? (
+                 <LinearGradient
+                   colors={['#000000', Colors.danger]}
+                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                   style={[Buttons.primary, { backgroundColor: 'transparent', opacity: 0.4 }]}
+                 >
+                   <Text style={[T.bodyMedium, { color: Colors.textMuted }]}>Save Reason</Text>
+                 </LinearGradient>
+               ) : (
+                 <View style={[Buttons.base, { backgroundColor: ac.accentDim }]}>
+                   <Text style={[T.bodyMedium, { color: Colors.textMuted }]}>Save Reason</Text>
+                 </View>
+               )
+            ) : isBad ? (
+              <LinearGradient
+                colors={['#000000', Colors.danger]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={[Buttons.primary, { backgroundColor: 'transparent' }]}
+              >
+                <Text style={[T.bodyMedium, { color: '#fff' }]}>Save Reason</Text>
+              </LinearGradient>
+            ) : (
+              <View style={[Buttons.primary, { backgroundColor: ac.accent }]}>
+                 <Text style={[T.bodyMedium, { color: '#fff' }]}>Save Reason</Text>
+              </View>
+            )}
+            {pressed && (
+              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'white', opacity: 0.15 }]} />
+            )}
+          </>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
 // ── Today Screen ──────────────────────────────────────────────────────────────
 export default function TodayScreen() {
   const formRef = useRef<HabitFormRef>(null);
   const moodSheetRef = useRef<BottomSheetRef>(null);
   const contextSheetRef = useRef<BottomSheetRef>(null);
+  const reasonSheetRef = useRef<BottomSheetRef>(null);
   const [contextHabit, setContextHabit] = React.useState<HabitWithLog | null>(null);
+  const [reasonHabitId, setReasonHabitId] = React.useState<string | null>(null);
 
   const isLoading = useHabitStore((s) => s.isLoading);
   const selectedDate = useHabitStore((s) => s.selectedDate);
+  
+  // NOTE (Issue #20): Streaks shown on habit cards reflect the user's *current* streak, 
+  // not their historical streak as of the `selectedDate`. Dynamically recalculating 
+  // per-habit streaks for arbitrary past dates on-the-fly is too computationally 
+  // expensive for the main thread. Behavior left as-is intentionally.
   const habitsForDate = useHabitsForSelectedDate();
   const categoriesWithHabits = useCategoriesWithHabits();
   const uncategorizedHabits = useUncategorizedHabits();
@@ -232,7 +447,11 @@ export default function TodayScreen() {
   const moodForDate = moodByDate.get(selectedDate) ?? null;
   const ac = useAccentColors();
 
-  const completed = habitsForDate.filter((h) => h.isCompleted).length;
+  const uncategorizedCompleted = uncategorizedHabits.reduce((sum, h) => sum + h.completionWeight, 0);
+  const uncategorizedTotal = uncategorizedHabits.length;
+  const uncategorizedPct = uncategorizedTotal > 0 ? uncategorizedCompleted / uncategorizedTotal : 0;
+
+  const completed = habitsForDate.reduce((sum, h) => sum + h.completionWeight, 0);
   const total = habitsForDate.length;
   const pct = total > 0 ? completed / total : 0;
 
@@ -240,6 +459,11 @@ export default function TodayScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setContextHabit(habit);
     contextSheetRef.current?.open();
+  }, []);
+
+  const handleLogReason = useCallback((habitId: string) => {
+    setReasonHabitId(habitId);
+    reasonSheetRef.current?.open();
   }, []);
 
   const nonEmptyCategories = categoriesWithHabits.filter((s) => s.habits.length > 0);
@@ -298,7 +522,7 @@ export default function TodayScreen() {
                 <ProgressRing progress={pct} size={60} strokeWidth={5} color={pct === 1 ? Colors.success : ac.accent} />
                 <View style={{ flex: 1 }}>
                   <Text style={T.h3}>
-                    {completed}/{total} done
+                    {Number(completed.toFixed(1))}/{total} done
                     {pct === 1 ? ' 🎉' : ''}
                   </Text>
                   <Text style={T.caption}>{Math.round(pct * 100)}% complete</Text>
@@ -336,7 +560,7 @@ export default function TodayScreen() {
                 {/* Categorized habits */}
                 {nonEmptyCategories.map((category, i) => (
                   <Animated.View key={category.id} entering={FadeInDown.delay(i * 80).duration(350)}>
-                    <CategorySection category={category} onLongPressHabit={handleLongPress} />
+                    <CategorySection category={category} onLongPressHabit={handleLongPress} onLogReason={handleLogReason} />
                   </Animated.View>
                 ))}
 
@@ -347,8 +571,15 @@ export default function TodayScreen() {
                       <Text style={[T.label, { marginBottom: Spacing[3] }]}>Other Habits</Text>
                     )}
                     {uncategorizedHabits.map((habit) => (
-                      <HabitCard key={habit.id} habit={habit} onLongPress={handleLongPress} />
+                      <HabitCard key={habit.id} habit={habit} onLongPress={handleLongPress} onLogReason={handleLogReason} />
                     ))}
+                    
+                    {uncategorizedPct === 1 && uncategorizedTotal > 0 && (
+                      <CelebrationBanner
+                        color={ac.accent}
+                        text="Other Habits complete!"
+                      />
+                    )}
                   </Animated.View>
                 )}
               </>
@@ -370,6 +601,9 @@ export default function TodayScreen() {
           onClose={() => contextSheetRef.current?.close()}
           formRef={formRef as React.RefObject<HabitFormRef>}
         />
+      </BottomSheet>
+      <BottomSheet ref={reasonSheetRef} title="Failure Analysis">
+        <LogReasonSheet habitId={reasonHabitId} sheetRef={reasonSheetRef as React.RefObject<BottomSheetRef>} />
       </BottomSheet>
     </SafeAreaView>
   );

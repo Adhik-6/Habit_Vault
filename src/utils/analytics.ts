@@ -1,5 +1,5 @@
 import type {
-  HabitLog, StreakData, HabitStrengthScore, DayIntensity,
+  Habit, HabitLog, StreakData, HabitStrengthScore, DayIntensity,
   HabitInsight, FailurePattern, MoodCorrelation, WeekdayStats,
   FailureReasonType,
 } from '../types';
@@ -7,59 +7,99 @@ import {
   toDateString, diffDays, getDayOfWeek, getDayName,
   getLast30Days, getLast365Days, addDays,
 } from './dateUtils';
+import { isHabitScheduledForDate } from '../services/habitService';
 
 // ─────────────────────────────────────────────
 // STREAK CALCULATION
 // ─────────────────────────────────────────────
 
+export function getCompletionWeight(habit: Habit, log: HabitLog | null | undefined): number {
+  let weight = 0;
+  if (log) {
+    switch (habit.type) {
+      case 'boolean':
+        weight = log.completedAt !== null ? 1 : 0;
+        break;
+      case 'quantity': {
+        const targetQ = habit.targetValue > 0 ? habit.targetValue : 1;
+        weight = Math.min(1, log.value / targetQ);
+        break;
+      }
+
+      case 'composite': {
+        const totalSteps = habit.compositeSteps.length || 1;
+        const completedSteps = log.compositeProgress ? Object.values(log.compositeProgress).filter(Boolean).length : 0;
+        weight = completedSteps / totalSteps;
+        break;
+      }
+      case 'counter':
+        weight = log.value > 0 ? 1 : 0;
+        break;
+    }
+  }
+  return habit.isBadHabit ? (1 - weight) : weight;
+}
+
 /**
  * Computes current streak and longest streak from an ordered list of logs.
- * A log is "completed" if completedAt is non-null.
+ * Streaks count consecutive SCHEDULED days where the habit was fully completed (or avoided for bad habits).
  */
-export function computeStreak(logs: HabitLog[]): StreakData {
-  if (logs.length === 0) {
+export function computeStreak(
+  habit: Habit,
+  logs: HabitLog[],
+  scheduledDates: string[],
+): StreakData {
+  if (scheduledDates.length === 0) {
     return { current: 0, longest: 0, lastCompletedDate: null };
   }
-
-  // Build a set of completed dates
-  const completedDates = new Set(
-    logs.filter((l) => l.completedAt !== null).map((l) => l.date),
-  );
-
-  if (completedDates.size === 0) {
-    return { current: 0, longest: 0, lastCompletedDate: null };
-  }
-
-  const sortedDates = Array.from(completedDates).sort();
-  const lastCompleted = sortedDates[sortedDates.length - 1];
+  const logByDate = new Map<string, HabitLog>(logs.map(l => [l.date, l]));
+  const sortedDates = [...scheduledDates].sort();
   const today = toDateString();
-  const yesterday = addDays(today, -1);
 
-  // Current streak: count backwards from today/yesterday
+  const isPositiveDay = (date: string) => {
+    return getCompletionWeight(habit, logByDate.get(date)) === 1;
+  };
+
+  const positiveDates = new Set<string>();
+  for (const d of sortedDates) {
+    if (isPositiveDay(d)) positiveDates.add(d);
+  }
+
+  if (positiveDates.size === 0) {
+    return { current: 0, longest: 0, lastCompletedDate: null };
+  }
+
+  const sortedPositive = Array.from(positiveDates).sort();
+  const lastCompleted = sortedPositive[sortedPositive.length - 1];
+
   let current = 0;
-  let cursor = completedDates.has(today) ? today : completedDates.has(yesterday) ? yesterday : null;
+  let activeIndex = sortedDates.length - 1;
+  while (activeIndex >= 0 && sortedDates[activeIndex] > today) {
+    activeIndex--;
+  }
 
-  if (cursor) {
-    while (completedDates.has(cursor)) {
+  for (let i = activeIndex; i >= 0; i--) {
+    const d = sortedDates[i];
+    if (isPositiveDay(d)) {
       current++;
-      cursor = addDays(cursor, -1);
-    }
-  }
-
-  // Longest streak: sliding window
-  let longest = 0;
-  let runLength = 1;
-
-  for (let i = 1; i < sortedDates.length; i++) {
-    const gap = diffDays(sortedDates[i - 1], sortedDates[i]);
-    if (gap === 1) {
-      runLength++;
     } else {
-      longest = Math.max(longest, runLength);
-      runLength = 1;
+      if (d === today) continue;
+      break;
     }
   }
-  longest = Math.max(longest, runLength);
+
+  let longest = 0;
+  let runLength = 0;
+  for (let i = 0; i < sortedDates.length; i++) {
+    if (isPositiveDay(sortedDates[i])) {
+      runLength++;
+      if (runLength > longest) longest = runLength;
+    } else {
+      if (sortedDates[i] !== today) {
+        runLength = 0;
+      }
+    }
+  }
 
   return { current, longest, lastCompletedDate: lastCompleted };
 }
@@ -68,16 +108,22 @@ export function computeStreak(logs: HabitLog[]): StreakData {
 // COMPLETION RATE
 // ─────────────────────────────────────────────
 
+/**
+ * For good habits: % of scheduled days where habit was completed.
+ * For bad habits:  % of scheduled days where habit was AVOIDED (not completed).
+ */
 export function computeCompletionRate(
+  habit: Habit,
   logs: HabitLog[],
   scheduledDates: string[],
 ): number {
   if (scheduledDates.length === 0) return 0;
-  const completedSet = new Set(
-    logs.filter((l) => l.completedAt !== null).map((l) => l.date),
-  );
-  const completed = scheduledDates.filter((d) => completedSet.has(d)).length;
-  return completed / scheduledDates.length;
+  const logByDate = new Map<string, HabitLog>(logs.map((l) => [l.date, l]));
+  let totalWeight = 0;
+  for (const d of scheduledDates) {
+    totalWeight += getCompletionWeight(habit, logByDate.get(d));
+  }
+  return totalWeight / scheduledDates.length;
 }
 
 // ─────────────────────────────────────────────
@@ -85,18 +131,21 @@ export function computeCompletionRate(
 // Measures how evenly distributed completions are over recent period.
 // ─────────────────────────────────────────────
 
-export function computeConsistencyScore(logs: HabitLog[], scheduledDates: string[]): number {
+export function computeConsistencyScore(
+  habit: Habit,
+  logs: HabitLog[],
+  scheduledDates: string[],
+): number {
   if (scheduledDates.length === 0) return 0;
   
-  const completedDates = new Set(logs.filter((l) => l.completedAt !== null).map(l => l.date));
-  const recentLogs = scheduledDates.filter(d => completedDates.has(d));
+  const logByDate = new Map<string, HabitLog>(logs.map((l) => [l.date, l]));
+  const positiveDays = scheduledDates.filter(d => getCompletionWeight(habit, logByDate.get(d)) === 1);
 
-  if (recentLogs.length === 0) return 0;
+  if (positiveDays.length === 0) return 0;
 
   // Group by week
   const weekMap = new Map<string, number>();
   
-  // Initialize all active weeks with 0
   for (const dateStr of scheduledDates) {
     const d = new Date(dateStr + 'T12:00:00');
     d.setDate(d.getDate() - d.getDay());
@@ -104,8 +153,7 @@ export function computeConsistencyScore(logs: HabitLog[], scheduledDates: string
     if (!weekMap.has(weekKey)) weekMap.set(weekKey, 0);
   }
 
-  // Count completions
-  for (const dateStr of recentLogs) {
+  for (const dateStr of positiveDays) {
     const d = new Date(dateStr + 'T12:00:00');
     d.setDate(d.getDate() - d.getDay());
     const weekKey = toDateString(d);
@@ -116,17 +164,14 @@ export function computeConsistencyScore(logs: HabitLog[], scheduledDates: string
 
   const weeks = Array.from(weekMap.values());
   if (weeks.length <= 1) {
-    // If the habit spans only 1 calendar week, variance is meaningless.
-    // Fall back to simple completion rate.
-    return recentLogs.length / scheduledDates.length;
+    return positiveDays.length / scheduledDates.length;
   }
 
   const avg = weeks.reduce((a, b) => a + b, 0) / weeks.length;
   const variance = weeks.reduce((sum, w) => sum + Math.pow(w - avg, 2), 0) / weeks.length;
   const stdDev = Math.sqrt(variance);
 
-  // Normalise: lower stdDev relative to avg = higher consistency
-  const cv = avg > 0 ? stdDev / avg : 1; // coefficient of variation
+  const cv = avg > 0 ? stdDev / avg : 1;
   return Math.max(0, 1 - Math.min(cv, 1));
 }
 
@@ -135,31 +180,32 @@ export function computeConsistencyScore(logs: HabitLog[], scheduledDates: string
 // ─────────────────────────────────────────────
 
 export function computeHabitStrengthScore(
-  habitId: string,
+  habit: Habit,
   logs: HabitLog[],
   scheduledDates: string[],
 ): HabitStrengthScore {
-  const completionRate = computeCompletionRate(logs, scheduledDates);
-  const consistencyScore = computeConsistencyScore(logs, scheduledDates);
-  const { current, longest, lastCompletedDate } = computeStreak(logs);
+  const completionRate = computeCompletionRate(habit, logs, scheduledDates);
+  const consistencyScore = computeConsistencyScore(habit, logs, scheduledDates);
+  const { current, longest, lastCompletedDate } = computeStreak(habit, logs, scheduledDates);
 
-  // Streak bonus: max 20 pts (10 for current, 10 for longest relative to days)
   const days = scheduledDates.length || 1;
   const streakBonus = Math.min(20, (current / days) * 10 + (longest / days) * 10);
 
   const baseScore = completionRate * 50 + consistencyScore * 30 + streakBonus;
   const score = Math.round(Math.min(100, Math.max(0, baseScore)));
 
-  return { habitId, score, completionRate, consistencyScore, streakBonus, streak: { current, longest, lastCompletedDate } };
+  return {
+    habitId: habit.id, score, completionRate, consistencyScore, streakBonus,
+    streak: { current, longest, lastCompletedDate },
+    isBadHabit: habit.isBadHabit,
+    scheduledDaysCount: days,
+  };
 }
 
 // ─────────────────────────────────────────────
 // HEATMAP INTENSITY
 // ─────────────────────────────────────────────
 
-/**
- * Maps a 0-1 completion rate to a 0-4 intensity tier for heatmap rendering.
- */
 export function toIntensityTier(rate: number): 0 | 1 | 2 | 3 | 4 {
   if (rate === 0) return 0;
   if (rate <= 0.25) return 1;
@@ -168,26 +214,29 @@ export function toIntensityTier(rate: number): 0 | 1 | 2 | 3 | 4 {
   return 4;
 }
 
-/**
- * Builds per-day intensity data for the last 365 days.
- * `logsByDate`: map of date → array of logs for that date.
- * `countByDate`: map of date → total scheduled habits that day.
- */
 export function buildDayIntensities(
   logsByDate: Map<string, HabitLog[]>,
-  scheduledCountByDate: Map<string, number>,
+  scheduledHabitsByDate: Map<string, Habit[]>,
   moodByDate: Map<string, number>,
 ): DayIntensity[] {
   const dates = getLast365Days();
+
   return dates.map((date) => {
     const logs = logsByDate.get(date) ?? [];
-    const total = scheduledCountByDate.get(date) ?? 0;
-    const completed = logs.filter((l) => l.completedAt !== null).length;
-    const completionRate = total > 0 ? completed / total : 0;
+    const scheduled = scheduledHabitsByDate.get(date) ?? [];
+    const total = scheduled.length;
+
+    let progressCount = 0;
+    for (const habit of scheduled) {
+      const log = logs.find(l => l.habitId === habit.id);
+      progressCount += getCompletionWeight(habit, log);
+    }
+
+    const completionRate = total > 0 ? Math.min(1, progressCount / total) : 0;
 
     return {
       date,
-      completedCount: completed,
+      completedCount: Math.round(progressCount),
       totalCount: total,
       completionRate,
       intensityTier: toIntensityTier(completionRate),
@@ -196,16 +245,10 @@ export function buildDayIntensities(
   });
 }
 
-import type { Habit } from '../types';
-
 /**
  * Builds a per-day intensity array for a SINGLE habit over the last 365 days.
- * Intensity rules by type:
- *   boolean   — 0 or 4 (binary)
- *   quantity  — partial progress: value/targetValue → 0-4 tiers
- *   duration  — durationSeconds/(targetValue*60) → 0-4 tiers
- *   composite — completedSteps/totalSteps → 0-4 tiers
- *   counter   — GitHub-style relative: max count in window = tier 4
+ * For bad habits: intensity represents occurrence level (higher = worse),
+ * using the same tier system but the UI renders with red colors.
  */
 export function buildHabitDayIntensities(
   logs: HabitLog[],
@@ -224,65 +267,33 @@ export function buildHabitDayIntensities(
 
   return dates.map((date) => {
     const log = logByDate.get(date);
+    const isScheduled = isHabitScheduledForDate(habit, date);
     let intensityTier: 0 | 1 | 2 | 3 | 4 = 0;
     let completionRate = 0;
     let rawValue = 0;
     let compositeProgress: Record<string, boolean> | undefined;
 
-    if (!log) {
-      return { date, completedCount: 0, totalCount: 1, completionRate: 0, intensityTier: 0, moodScore: null, rawValue: 0 };
+    if (log) {
+      rawValue = habit.type === 'composite' ? Object.values(log.compositeProgress).filter(Boolean).length : log.value;
+      compositeProgress = log.compositeProgress;
     }
 
-    switch (habit.type) {
-      case 'boolean':
-        intensityTier = log.completedAt ? 4 : 0;
-        completionRate = log.completedAt ? 1 : 0;
-        rawValue = log.completedAt ? 1 : 0;
-        break;
-
-      case 'quantity': {
-        const target = habit.targetValue > 0 ? habit.targetValue : 1;
-        rawValue = log.value;
-        completionRate = Math.min(1, log.value / target);
-        intensityTier = toIntensityTier(completionRate);
-        break;
-      }
-
-      case 'duration': {
-        const targetSec = (habit.targetValue > 0 ? habit.targetValue : 1) * 60;
-        rawValue = log.durationSeconds;
-        completionRate = Math.min(1, log.durationSeconds / targetSec);
-        intensityTier = toIntensityTier(completionRate);
-        break;
-      }
-
-      case 'composite': {
-        const totalSteps = habit.compositeSteps.length || 1;
-        const completedSteps = Object.values(log.compositeProgress).filter(Boolean).length;
-        rawValue = completedSteps;
-        compositeProgress = log.compositeProgress;
-        completionRate = Math.min(1, completedSteps / totalSteps);
-        intensityTier = toIntensityTier(completionRate);
-        break;
-      }
-
-      case 'counter': {
-        // GitHub-style: normalise by max in the period
-        rawValue = log.value;
-        const pct = counterMax > 0 ? log.value / counterMax : 0;
-        completionRate = pct;
-        intensityTier = log.value === 0 ? 0
-          : pct <= 0.25 ? 1
-          : pct <= 0.5  ? 2
-          : pct <= 0.75 ? 3
-          : 4;
-        break;
-      }
+    if (!isScheduled) {
+       return { date, completedCount: 0, totalCount: 1, completionRate: 0, intensityTier: 0, moodScore: null, rawValue, compositeProgress };
     }
+
+    let weight = getCompletionWeight(habit, log);
+    if (habit.type === 'counter' && log) {
+       weight = counterMax > 0 ? log.value / counterMax : 0;
+       if (habit.isBadHabit) weight = 1 - weight;
+    }
+
+    completionRate = weight;
+    intensityTier = habit.type === 'counter' && log?.value === 0 && !habit.isBadHabit ? 0 : toIntensityTier(weight);
 
     return {
       date,
-      completedCount: log.completedAt ? 1 : 0,
+      completedCount: log?.completedAt ? 1 : 0,
       totalCount: 1,
       completionRate,
       intensityTier,
@@ -299,28 +310,52 @@ export function buildHabitDayIntensities(
 // WEEKDAY STATS
 // ─────────────────────────────────────────────
 
-export function computeWeekdayStats(
-  logs: HabitLog[],
-  scheduledDates: string[],
+export function computeGlobalWeekdayStats(
+  logsByDate: Map<string, HabitLog[]>,
+  scheduledHabitsByDate: Map<string, Habit[]>,
+  dates: string[],
 ): WeekdayStats[] {
   const totalByDay = new Array(7).fill(0);
-  const completedByDay = new Array(7).fill(0);
+  const progressByDay = new Array(7).fill(0);
 
-  for (const date of scheduledDates) {
+  for (const date of dates) {
     const dow = getDayOfWeek(date);
-    totalByDay[dow]++;
-  }
+    const scheduled = scheduledHabitsByDate.get(date) ?? [];
+    totalByDay[dow] += scheduled.length;
 
-  for (const log of logs) {
-    if (log.completedAt !== null) {
-      completedByDay[getDayOfWeek(log.date)]++;
+    const logs = logsByDate.get(date) ?? [];
+    for (const habit of scheduled) {
+      const log = logs.find(l => l.habitId === habit.id);
+      progressByDay[dow] += getCompletionWeight(habit, log);
     }
   }
 
   return Array.from({ length: 7 }, (_, i) => ({
     dayIndex: i,
     totalAttempts: totalByDay[i],
-    completionRate: totalByDay[i] > 0 ? completedByDay[i] / totalByDay[i] : 0,
+    completionRate: totalByDay[i] > 0 ? Math.min(1, progressByDay[i] / totalByDay[i]) : 0,
+  }));
+}
+
+export function computeWeekdayStats(
+  habit: Habit,
+  logs: HabitLog[],
+  scheduledDates: string[],
+): WeekdayStats[] {
+  const totalByDay = new Array(7).fill(0);
+  const progressByDay = new Array(7).fill(0);
+  const logByDate = new Map<string, HabitLog>(logs.map((l) => [l.date, l]));
+
+  for (const date of scheduledDates) {
+    const dow = getDayOfWeek(date);
+    totalByDay[dow]++;
+    progressByDay[dow] += getCompletionWeight(habit, logByDate.get(date));
+  }
+
+  return Array.from({ length: 7 }, (_, i) => ({
+    dayIndex: i,
+    totalAttempts: totalByDay[i],
+    completionRate: totalByDay[i] > 0 ? Math.min(1, progressByDay[i] / totalByDay[i]) : 0,
   }));
 }
 
@@ -331,7 +366,7 @@ export function computeWeekdayStats(
 export function analyzeFailurePatterns(
   logs: HabitLog[],
 ): FailurePattern[] {
-  const missed = logs.filter((l) => !l.completedAt && l.failureReason);
+  const missed = logs.filter((l) => !!l.failureReason);
   if (missed.length === 0) return [];
 
   const reasonCount = new Map<string, { count: number; dayMap: Map<number, number> }>();
@@ -404,16 +439,71 @@ export function computeMoodCorrelation(
 // ─────────────────────────────────────────────
 
 export function generateInsights(
-  habitId: string,
-  habitName: string,
+  habit: Habit,
   logs: HabitLog[],
   scheduledDates: string[],
 ): HabitInsight[] {
   const insights: HabitInsight[] = [];
   if (logs.length < 7) return insights;
 
-  // Worst day of week
-  const weekdayStats = computeWeekdayStats(logs, scheduledDates);
+  const weekdayStats = computeWeekdayStats(habit, logs, scheduledDates);
+
+  if (habit.isBadHabit) {
+    // ── Bad habit insights ──
+
+    // Most vulnerable day (highest occurrence rate)
+    // Avoidance rate is high = good. So we want lowest completionRate (highest occurrence)
+    const worstDay = weekdayStats
+      .filter((d) => d.totalAttempts >= 2)
+      .sort((a, b) => a.completionRate - b.completionRate)[0];
+
+    if (worstDay && worstDay.completionRate < 0.7) {
+      insights.push({
+        type: 'bad_habit_slip',
+        habitId: habit.id,
+        message: `You slip on "${habit.name}" most often on ${getDayName(worstDay.dayIndex)}s — plan ahead for those days.`,
+        data: { dayIndex: worstDay.dayIndex, occurrenceRate: 1 - worstDay.completionRate },
+      });
+    }
+
+    // Clean streak
+    const { current } = computeStreak(habit, logs, scheduledDates);
+    if (current >= 3) {
+      insights.push({
+        type: 'bad_habit_clean',
+        habitId: habit.id,
+        message: `You've been clean from "${habit.name}" for ${current} days — keep the momentum! 🛡️`,
+        data: { cleanDays: current },
+      });
+    }
+
+    // Trend: compare avoidance rates
+    const last7 = getLast30Days().slice(-7);
+    const prev7 = getLast30Days().slice(-14, -7);
+    const occRate7 = 1 - computeCompletionRate(habit, logs.filter((l) => last7.includes(l.date)), last7);
+    const occRatePrev7 = 1 - computeCompletionRate(habit, logs.filter((l) => prev7.includes(l.date)), prev7);
+
+    if (occRate7 < occRatePrev7 - 0.2) {
+      insights.push({
+        type: 'improving',
+        habitId: habit.id,
+        message: `"${habit.name}" occurrences are trending down — ${Math.round(occRate7 * 100)}% this week vs ${Math.round(occRatePrev7 * 100)}% last week. 💪`,
+        data: { occRate7, occRatePrev7 },
+      });
+    } else if (occRate7 > occRatePrev7 + 0.2) {
+      insights.push({
+        type: 'declining',
+        habitId: habit.id,
+        message: `"${habit.name}" occurrences are rising — ${Math.round(occRate7 * 100)}% this week vs ${Math.round(occRatePrev7 * 100)}% last week. Stay alert.`,
+        data: { occRate7, occRatePrev7 },
+      });
+    }
+
+    return insights;
+  }
+
+  // ── Good habit insights (original logic) ──
+
   const worstDay = weekdayStats
     .filter((d) => d.totalAttempts >= 2)
     .sort((a, b) => a.completionRate - b.completionRate)[0];
@@ -421,43 +511,40 @@ export function generateInsights(
   if (worstDay && worstDay.completionRate < 0.5) {
     insights.push({
       type: 'worst_day',
-      habitId,
-      message: `You skip "${habitName}" most often on ${getDayName(worstDay.dayIndex)}s (${Math.round(worstDay.completionRate * 100)}% completion).`,
+      habitId: habit.id,
+      message: `You skip "${habit.name}" most often on ${getDayName(worstDay.dayIndex)}s (${Math.round(worstDay.completionRate * 100)}% completion).`,
       data: { dayIndex: worstDay.dayIndex, completionRate: worstDay.completionRate },
     });
   }
 
-  // Streak risk
-  const { current } = computeStreak(logs);
+  const { current } = computeStreak(habit, logs, scheduledDates);
   if (current >= 3) {
-    const tomorrow = addDays(toDateString(), 1);
     insights.push({
       type: 'streak_risk',
-      habitId,
-      message: `You're on a ${current}-day streak for "${habitName}". Don't break it!`,
+      habitId: habit.id,
+      message: `You're on a ${current}-day streak for "${habit.name}". Don't break it!`,
       data: { streakLength: current },
     });
   }
 
-  // Trend: compare last 7 days vs previous 7 days
   const last7 = getLast30Days().slice(-7);
   const prev7 = getLast30Days().slice(-14, -7);
 
-  const rate7 = computeCompletionRate(logs.filter((l) => last7.includes(l.date)), last7);
-  const ratePrev7 = computeCompletionRate(logs.filter((l) => prev7.includes(l.date)), prev7);
+  const rate7 = computeCompletionRate(habit, logs.filter((l) => last7.includes(l.date)), last7);
+  const ratePrev7 = computeCompletionRate(habit, logs.filter((l) => prev7.includes(l.date)), prev7);
 
   if (rate7 > ratePrev7 + 0.2) {
     insights.push({
       type: 'improving',
-      habitId,
-      message: `"${habitName}" is trending up — ${Math.round(rate7 * 100)}% this week vs ${Math.round(ratePrev7 * 100)}% last week.`,
+      habitId: habit.id,
+      message: `"${habit.name}" is trending up — ${Math.round(rate7 * 100)}% this week vs ${Math.round(ratePrev7 * 100)}% last week.`,
       data: { rate7, ratePrev7 },
     });
   } else if (rate7 < ratePrev7 - 0.2) {
     insights.push({
       type: 'declining',
-      habitId,
-      message: `"${habitName}" is declining — ${Math.round(rate7 * 100)}% this week vs ${Math.round(ratePrev7 * 100)}% last week.`,
+      habitId: habit.id,
+      message: `"${habit.name}" is declining — ${Math.round(rate7 * 100)}% this week vs ${Math.round(ratePrev7 * 100)}% last week.`,
       data: { rate7, ratePrev7 },
     });
   }

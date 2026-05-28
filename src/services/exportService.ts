@@ -1,17 +1,23 @@
 import 'react-native-get-random-values';
 import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system';
+import { StorageAccessFramework } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import { getDb } from '../db/database';
 import type {
   Achievement,
   BackupData, BackupMeta,
-  FailureReason
+  FailureReason,
+  StreakTarget
 } from '../types';
 import { getAllHabitsRaw } from './habitService';
 import { getAllLogsRaw } from './logService';
 import { getAllMoodLogsRaw } from './moodService';
 import { getAllCategoriesRaw } from './categoryService';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { useAuthStore } from '../store/useAuthStore';
 
 const BACKUP_VERSION = '1.0.0';
 const BACKUP_DIR = new Directory(Paths.document, 'backups');
@@ -40,6 +46,10 @@ async function collectAllData(): Promise<BackupData> {
     })),
   );
 
+  const streakTargets = await db.getAllAsync<StreakTarget>(
+    'SELECT * FROM streak_targets ORDER BY createdAt ASC',
+  );
+
   return {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
@@ -49,6 +59,9 @@ async function collectAllData(): Promise<BackupData> {
     moodLogs,
     failureReasons,
     achievements,
+    streakTargets,
+    settings: useSettingsStore.getState(),
+    auth: useAuthStore.getState(),
   };
 }
 
@@ -77,79 +90,35 @@ export async function exportToJSON(encrypt = false, passphrase?: string): Promis
 
 export async function shareBackupJSON(encrypt = false, passphrase?: string): Promise<void> {
   const fileUri = await exportToJSON(encrypt, passphrase);
+  
+  if (Platform.OS === 'android') {
+    try {
+      const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (permissions.granted) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = encrypt ? `habitvault-backup-${timestamp}.enc.json` : `habitvault-backup-${timestamp}.json`;
+        
+        const content = await new File(fileUri).text();
+        const newUri = await StorageAccessFramework.createFileAsync(permissions.directoryUri, filename, 'application/json');
+        await StorageAccessFramework.writeAsStringAsync(newUri, content);
+        return;
+      }
+    } catch (e) {
+      console.warn('SAF failed, falling back to share', e);
+    }
+  }
+  
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(fileUri, {
       mimeType: 'application/json',
       dialogTitle: 'Share HabitVault Backup',
     });
+  } else {
+    throw new Error(`File generated at: ${fileUri}`);
   }
 }
 
-// ── CSV Export ──────────────────────────────────────────────────────────────
 
-export async function exportToCSV(encrypt = false, passphrase?: string): Promise<string> {
-  const data = await collectAllData();
-
-  const headers = [
-    'date', 'habitId', 'habitName', 'type', 'value',
-    'completedAt', 'durationSeconds', 'notes',
-    'moodRating', 'failureReason', 'categoryId', 'categoryName', 'categoryColor', 'habitColor'
-  ];
-
-  const habitMap = new Map(data.habits.map((h) => [h.id, h]));
-  const categoryMap = new Map(data.categories.map((c) => [c.id, c]));
-
-  const rows = data.habitLogs.map((log) => {
-    const habit = habitMap.get(log.habitId);
-    const category = habit?.categoryId ? categoryMap.get(habit.categoryId) : null;
-
-    return [
-      escapeCSV(log.date),
-      escapeCSV(log.habitId),
-      escapeCSV(habit?.name),
-      escapeCSV(habit?.type),
-      escapeCSV(log.value),
-      escapeCSV(log.completedAt),
-      escapeCSV(log.durationSeconds),
-      escapeCSV(log.notes),
-      escapeCSV(log.moodRating),
-      escapeCSV(log.failureReason),
-      escapeCSV(category?.id),
-      escapeCSV(category?.name),
-      escapeCSV(category?.color),
-      escapeCSV(habit?.color),
-    ].join(',');
-  });
-
-  const csv = [headers.join(','), ...rows].join('\r\n');
-  const BOM = '\uFEFF'; // Excel-friendly
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  await ensureBackupDir();
-
-  let content = BOM + csv;
-  let filename = `habitvault-logs-${timestamp}.csv`;
-
-  if (encrypt && passphrase) {
-    content = await encryptData(csv, passphrase);
-    filename = `habitvault-logs-${timestamp}.enc.csv`;
-  }
-
-  const csvFile = new File(BACKUP_DIR, filename);
-  await csvFile.write(content);
-
-  return csvFile.uri;
-}
-
-export async function shareExportCSV(encrypt = false, passphrase?: string): Promise<void> {
-  const fileUri = await exportToCSV(encrypt, passphrase);
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(fileUri, {
-      mimeType: encrypt ? 'application/octet-stream' : 'text/csv',
-      dialogTitle: 'Share Habit Logs CSV',
-    });
-  }
-}
 
 // ── Import ──────────────────────────────────────────────────────────────────
 
@@ -173,81 +142,25 @@ export async function importBackupFromUri(uri: string, passphrase?: string): Pro
     textStr = await decryptData(raw, passphrase);
   }
 
-  // Determine if JSON or CSV
-  const isJson = textStr.trim().startsWith('{');
-  
-  if (isJson) {
-    let data: BackupData;
-    try {
-      data = JSON.parse(textStr);
-      if (!data.habits || !data.habitLogs) {
-        throw new Error('Invalid backup data structure.');
-      }
-    } catch (e: any) {
-      throw new Error('Invalid backup file format.');
+  // Only support JSON now
+  let data: BackupData;
+  try {
+    data = JSON.parse(textStr);
+    if (!data.habits || !data.habitLogs) {
+      throw new Error('Invalid backup data structure.');
     }
-    await restoreFromBackup(data);
-
-    return {
-      version: data.version,
-      exportedAt: data.exportedAt,
-      habitCount: data.habits.length,
-      logCount: data.habitLogs.length,
-      encrypted: isEncrypted,
-    };
-  } else {
-    // Try CSV
-    const rows = parseCSV(textStr);
-    if (rows.length === 0) {
-      throw new Error('Invalid backup file format. Expected a JSON or CSV backup.');
-    }
-    await restoreFromCSV(rows);
-    const habitIds = new Set(rows.map(r => r.habitId));
-    return {
-      version: '1.0.0',
-      exportedAt: new Date().toISOString(),
-      habitCount: habitIds.size,
-      logCount: rows.length,
-      encrypted: isEncrypted,
-    };
+  } catch (e: any) {
+    throw new Error('Invalid backup file format. Expected a JSON backup.');
   }
-}
+  await restoreFromBackup(data);
 
-function parseCSV(csvText: string): any[] {
-  const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
-  if (lines.length < 2) return [];
-  // remove BOM if present
-  const headerLine = lines[0].replace(/^\uFEFF/, '');
-  const headers = headerLine.split(',').map(h => h.replace(/^"|"$/g, '').trim());
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const rowStr = lines[i];
-    const values: string[] = [];
-    let curVal = '';
-    let inQuote = false;
-    for (let j = 0; j < rowStr.length; j++) {
-      const char = rowStr[j];
-      if (char === '"') {
-        inQuote = !inQuote;
-      } else if (char === ',' && !inQuote) {
-        values.push(curVal);
-        curVal = '';
-      } else {
-        curVal += char;
-      }
-    }
-    values.push(curVal);
-
-    const obj: any = {};
-    headers.forEach((h, idx) => {
-      let val = values[idx];
-      if (val === undefined) val = '';
-      val = val.replace(/^"|"$/g, '').replace(/""/g, '"').trim();
-      obj[h] = val === '' ? null : val;
-    });
-    rows.push(obj);
-  }
-  return rows;
+  return {
+    version: data.version,
+    exportedAt: data.exportedAt,
+    habitCount: data.habits.length,
+    logCount: data.habitLogs.length,
+    encrypted: isEncrypted,
+  };
 }
 
 async function restoreFromBackup(data: BackupData): Promise<void> {
@@ -256,6 +169,7 @@ async function restoreFromBackup(data: BackupData): Promise<void> {
   await db.withTransactionAsync(async () => {
     // Clear existing data
     await db.execAsync('DELETE FROM failure_reasons');
+    await db.execAsync('DELETE FROM streak_targets');
     await db.execAsync('DELETE FROM habit_logs');
     await db.execAsync('DELETE FROM habits');
     await db.execAsync('DELETE FROM categories');
@@ -274,12 +188,12 @@ async function restoreFromBackup(data: BackupData): Promise<void> {
     for (const h of data.habits) {
       await db.runAsync(
         `INSERT OR IGNORE INTO habits
-         (id, name, description, type, targetValue, unit, frequencyRules,
-          color, icon, categoryId, compositeSteps, createdAt, archivedAt, sortOrder)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [h.id, h.name, h.description, h.type, h.targetValue, h.unit,
+         (id, name, description, type, targetValue, stepValue, unit, frequencyRules,
+          color, icon, categoryId, compositeSteps, createdAt, archivedAt, sortOrder, isBadHabit)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [h.id, h.name, h.description, h.type, h.targetValue, h.stepValue ?? 1, h.unit,
         JSON.stringify(h.frequencyRules), h.color, h.icon, h.categoryId,
-        JSON.stringify(h.compositeSteps), h.createdAt, h.archivedAt, h.sortOrder],
+        JSON.stringify(h.compositeSteps), h.createdAt, h.archivedAt, h.sortOrder, h.isBadHabit ? 1 : 0],
       );
     }
 
@@ -303,84 +217,26 @@ async function restoreFromBackup(data: BackupData): Promise<void> {
         [m.id, m.date, m.score, m.emoji, m.notes, m.createdAt],
       );
     }
-  });
-}
 
-import { generateId } from '../utils/idUtils';
-import { scoreToEmoji } from './moodService';
-
-async function restoreFromCSV(rows: any[]): Promise<void> {
-  const db = await getDb();
-  await db.withTransactionAsync(async () => {
-    for (const r of rows) {
-      if (!r.habitId || !r.date) continue;
-      
-      // Handle category if provided
-      if (r.categoryId) {
+    // Restore streak targets
+    if (data.streakTargets) {
+      for (const st of data.streakTargets) {
         await db.runAsync(
-          'INSERT OR IGNORE INTO categories (id, name, icon, color, sortOrder, createdAt) VALUES (?,?,?,?,?,?)',
-          [r.categoryId, r.categoryName || 'Imported Category', 'folder', r.categoryColor || '#888888', 0, new Date().toISOString()]
+          'INSERT OR IGNORE INTO streak_targets (id, habitId, label, targetDays, createdAt, achievedAt) VALUES (?,?,?,?,?,?)',
+          [st.id, st.habitId, st.label, st.targetDays, st.createdAt, st.achievedAt]
         );
-      }
-
-      // Ensure habit exists
-      const habitExists = await db.getFirstAsync('SELECT id FROM habits WHERE id = ?', [r.habitId]);
-      if (!habitExists) {
-        // Create stub habit
-        await db.runAsync(
-          `INSERT INTO habits (id, name, description, type, targetValue, unit, frequencyRules, color, icon, categoryId, compositeSteps, createdAt, archivedAt, sortOrder)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-           [
-             r.habitId,
-             r.habitName || 'Imported Habit',
-             '',
-             r.type || 'boolean',
-             1,
-             '',
-             JSON.stringify({ type: 'daily' }),
-             r.habitColor || '#6366F1',
-             'star',
-             r.categoryId || null,
-             '[]',
-             new Date().toISOString(),
-             null,
-             0
-           ]
-        );
-      }
-
-      // Insert log
-      await db.runAsync(
-        `INSERT OR IGNORE INTO habit_logs (id, habitId, date, value, completedAt, durationSeconds, notes, moodRating, failureReason, failureCustomText, compositeProgress)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-         [
-           generateId(),
-           r.habitId,
-           r.date,
-           parseFloat(r.value) || 0,
-           r.completedAt || null,
-           parseInt(r.durationSeconds) || 0,
-           r.notes || '',
-           r.moodRating ? parseInt(r.moodRating) : null,
-           r.failureReason || null,
-           '',
-           '{}'
-         ]
-      );
-
-      // Restore mood if present
-      if (r.moodRating) {
-        const score = parseInt(r.moodRating);
-        if (!isNaN(score)) {
-           await db.runAsync(
-             'INSERT OR IGNORE INTO mood_logs (id, date, score, emoji, notes, createdAt) VALUES (?,?,?,?,?,?)',
-             [generateId(), r.date, score, scoreToEmoji(score), '', new Date().toISOString()]
-           );
-        }
       }
     }
   });
+
+  if (data.settings) {
+    useSettingsStore.setState(data.settings);
+  }
+  if (data.auth) {
+    useAuthStore.setState(data.auth);
+  }
 }
+
 
 import CryptoJS from 'crypto-js';
 
@@ -393,13 +249,17 @@ async function encryptData(plaintext: string, passphrase: string): Promise<strin
 }
 
 async function decryptData(encryptedJson: string, passphrase: string): Promise<string> {
-  const { data } = JSON.parse(encryptedJson);
-  const bytes = CryptoJS.AES.decrypt(data, passphrase);
-  const plaintext = bytes.toString(CryptoJS.enc.Utf8);
-  if (!plaintext) {
+  try {
+    const { data } = JSON.parse(encryptedJson);
+    const bytes = CryptoJS.AES.decrypt(data, passphrase);
+    const plaintext = bytes.toString(CryptoJS.enc.Utf8);
+    if (!plaintext) {
+      throw new Error('Decryption failed. Incorrect passphrase or corrupted data.');
+    }
+    return plaintext;
+  } catch (e: any) {
     throw new Error('Decryption failed. Incorrect passphrase or corrupted data.');
   }
-  return plaintext;
 }
 
 // ── Utils ───────────────────────────────────────────────────────────────────
@@ -408,13 +268,4 @@ async function ensureBackupDir(): Promise<void> {
   if (!BACKUP_DIR.exists) {
     BACKUP_DIR.create();
   }
-}
-
-function escapeCSV(value: any): string {
-  if (value === null || value === undefined) return '';
-  const str = String(value);
-  if (/[",\n]/.test(str)) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
 }

@@ -1,5 +1,5 @@
 import { useMoodStore } from '@src/store/useMoodStore';
-import { getLast30Days } from '@src/utils/dateUtils';
+import { getCurrentMonthDates } from '@src/utils/dateUtils';
 import { useMemo } from 'react';
 
 export function useMoodTimeline(days: number = 30) {
@@ -9,7 +9,7 @@ export function useMoodTimeline(days: number = 30) {
     // 2. Perform the logic directly inside the memo so it reacts to changes
     return useMemo(() => {
         // Get the array of dates
-        const dates = getLast30Days().slice(-days);
+        const dates = getCurrentMonthDates();
 
         // Filter and map out the timeline
         return dates

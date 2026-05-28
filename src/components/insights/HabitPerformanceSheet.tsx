@@ -16,6 +16,7 @@ import { useAnalyticsStore } from '@store/useAnalyticsStore';
 import { getLogsForHabit } from '@src/services/logService';
 import type { HabitLog } from '@src/types';
 import React, { useRef, useState, useEffect } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, View } from 'react-native';
 import { useHabitColor } from '@/hooks/use-habit-color';
 import { useAccentColors } from '@/hooks/use-accent-colors';
@@ -25,10 +26,11 @@ interface HabitDetailProps {
 }
 
 export function HabitDetail({ habit }: HabitDetailProps) {
-  const habitColor = useHabitColor(habit.categoryId);
+  const isBad = habit.isBadHabit;
+  const ac = useAccentColors();
+  const habitColor = useHabitColor(habit.categoryId) || ac.accent;
   const strengthScores = useAnalyticsStore((s) => s.strengthScores);
   const moodByDate = useMoodScoreMap();
-  const ac = useAccentColors();
   
   const [historyLogs, setHistoryLogs] = useState<HabitLog[]>([]);
 
@@ -64,7 +66,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
   let compositeLogCount = 0;
 
   historyLogs.forEach(l => {
-    if (habit.type === 'quantity' || habit.type === 'duration' || habit.type === 'counter') {
+    if (habit.type === 'quantity' || habit.type === 'counter') {
       if (l.value > highestValue) highestValue = l.value;
       totalValue += l.value;
       if (l.value > 0) logCount++;
@@ -89,11 +91,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
   let averageValueDisplay = averageValue;
   let statUnit = habit.unit;
 
-  if (habit.type === 'duration') {
-    highestValueDisplay = (highestValue / 60).toFixed(0);
-    averageValueDisplay = (parseFloat(averageValue) / 60).toFixed(0);
-    statUnit = 'min';
-  }
+
 
   const averageSteps = compositeLogCount > 0 ? (totalStepsCompleted / compositeLogCount).toFixed(1) : '0';
 
@@ -106,7 +104,15 @@ export function HabitDetail({ habit }: HabitDetailProps) {
     <View style={{ gap: Spacing[4], paddingBottom: Spacing[6] }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[3] }}>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: habitColor }} />
+        {isBad ? (
+          <LinearGradient
+            colors={['#000000', Colors.danger]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={{ width: 14, height: 14, borderRadius: 7 }}
+          />
+        ) : (
+          <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: habitColor }} />
+        )}
         <View style={{ flex: 1 }}>
           <Text style={T.h3} numberOfLines={2}>{habit.name}</Text>
           {habit.description ? (
@@ -119,13 +125,13 @@ export function HabitDetail({ habit }: HabitDetailProps) {
       <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
         {[
           { label: 'Strength', value: score?.score ?? 0, unit: '/100', color: habitColor },
-          { label: 'Streak', value: streak?.current ?? 0, unit: 'd', color: Colors.warning },
+          { label: isBad ? 'Clean Streak' : 'Streak', value: streak?.current ?? 0, unit: 'd', color: Colors.warning },
           { label: 'Best', value: streak?.longest ?? 0, unit: 'd', color: Colors.success },
-          { label: 'Rate', value: Math.round(completionRate * 100), unit: '%', color: Colors.info },
+          { label: isBad ? 'Avoidance' : 'Rate', value: Math.round(completionRate * 100), unit: '%', color: Colors.info },
         ].map((m) => (
           <View key={m.label} style={[Cards.compact, { flex: 1, alignItems: 'center', paddingVertical: Spacing[2], paddingHorizontal: Spacing[1] }]}>
             <Text style={[T.scoreSm, { color: m.color }]} numberOfLines={1} adjustsFontSizeToFit>{m.value}<Text style={[T.xs, { color: Colors.textMuted }]}>{m.unit}</Text></Text>
-            <Text style={T.xs}>{m.label}</Text>
+            <Text style={T.xs} numberOfLines={1} adjustsFontSizeToFit>{m.label}</Text>
           </View>
         ))}
       </View>
@@ -137,10 +143,18 @@ export function HabitDetail({ habit }: HabitDetailProps) {
           <Text style={[T.sm, { color: habitColor }]}>{Math.round(consistencyScore * 100)}%</Text>
         </View>
         <View style={{ backgroundColor: Colors.border, height: 6, borderRadius: 3, overflow: 'hidden' }}>
-          <View style={{
-            width: `${consistencyScore * 100}%`, height: 6,
-            backgroundColor: habitColor, borderRadius: 3,
-          }} />
+          {isBad ? (
+            <LinearGradient
+              colors={['#1A1A2E', habitColor]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={{ width: `${consistencyScore * 100}%`, height: 6, borderRadius: 3 }}
+            />
+          ) : (
+            <View style={{
+              width: `${consistencyScore * 100}%`, height: 6,
+              backgroundColor: habitColor, borderRadius: 3,
+            }} />
+          )}
         </View>
         <Text style={[T.caption, { marginTop: Spacing[2] }]}>
           {consistencyScore > 0.8 ? 'Excellent — very regular pattern 🏆'
@@ -167,7 +181,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
             {habit.frequencyRules.type === 'daily' ? 'Every day' :
               `Weekly on: ${(habit.frequencyRules.daysOfWeek ?? []).map((d) => getShortDayName(d)).join(', ')}`}
           </Text>
-          {(habit.type === 'quantity' || habit.type === 'duration') && (
+          {habit.type === 'quantity' && (
             <Text style={T.caption}>
               Target: {habit.targetValue}{habit.unit ? ` ${habit.unit}` : ''}
             </Text>
@@ -179,7 +193,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
       </View>
 
       {/* Values & Checklist Stats */}
-      {(habit.type === 'quantity' || habit.type === 'duration' || habit.type === 'counter') && logCount > 0 && (
+      {(habit.type === 'quantity' || habit.type === 'counter') && logCount > 0 && (
         <View style={{ gap: Spacing[3] }}>
           <Text style={T.label}>Performance Stats</Text>
           <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
@@ -188,7 +202,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
                 <Ionicons name="trophy-outline" size={20} color={Colors.warning} />
               </View>
               <Text style={T.sm}>Highest Record</Text>
-              <Text style={[T.h2, { color: ac.accent, marginTop: Spacing[1] }]}>
+              <Text style={[T.h2, { color: Colors.warning, marginTop: Spacing[1] }]}>
                 {highestValueDisplay}
                 <Text style={[T.sm, { color: Colors.textMuted }]}> {statUnit}</Text>
               </Text>
@@ -198,7 +212,7 @@ export function HabitDetail({ habit }: HabitDetailProps) {
                 <Ionicons name="stats-chart-outline" size={20} color={Colors.info} />
               </View>
               <Text style={T.sm}>Average</Text>
-              <Text style={[T.h2, { color: ac.accent, marginTop: Spacing[1] }]}>
+              <Text style={[T.h2, { color: Colors.info, marginTop: Spacing[1] }]}>
                 {averageValueDisplay}
                 <Text style={[T.sm, { color: Colors.textMuted }]}> {statUnit}</Text>
               </Text>
@@ -213,11 +227,11 @@ export function HabitDetail({ habit }: HabitDetailProps) {
           
           <View style={[Cards.compact, { flexDirection: 'row', alignItems: 'center', padding: Spacing[4], gap: Spacing[4] }]}>
             <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="checkmark-done-circle-outline" size={28} color={ac.accent} />
+              <Ionicons name="checkmark-done-circle-outline" size={28} color={habitColor} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={T.sm}>Average items completed</Text>
-              <Text style={[T.h2, { color: ac.accent, marginTop: 2 }]}>
+              <Text style={[T.h2, { color: habitColor, marginTop: 2 }]}>
                 {averageSteps}
                 <Text style={[T.sm, { color: Colors.textMuted }]}> items</Text>
               </Text>
@@ -229,12 +243,30 @@ export function HabitDetail({ habit }: HabitDetailProps) {
             <View style={{ gap: Spacing[3] }}>
               {rankedSteps.map((step, index) => (
                 <View key={step.id} style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[3] }}>
-                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: index === 0 ? Colors.warningDim : Colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={[T.smMedium, { color: index === 0 ? Colors.warning : Colors.textMuted }]}>{index + 1}</Text>
-                  </View>
+                  {index === 0 ? (
+                    isBad ? (
+                      <LinearGradient
+                        colors={['#000000', Colors.danger]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', padding: 1 }}
+                      >
+                        <View style={{ flex: 1, alignSelf: 'stretch', borderRadius: 13, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={[T.smMedium, { color: Colors.danger }]}>{index + 1}</Text>
+                        </View>
+                      </LinearGradient>
+                    ) : (
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'transparent', borderWidth: 1, borderColor: habitColor, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={[T.smMedium, { color: habitColor }]}>{index + 1}</Text>
+                      </View>
+                    )
+                  ) : (
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={[T.smMedium, { color: habitColor }]}>{index + 1}</Text>
+                    </View>
+                  )}
                   <Text style={[T.bodyMedium, { flex: 1 }]} numberOfLines={1}>{step.title}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[1] }}>
-                    <Text style={[T.smMedium, { color: ac.accent }]}>{step.completedTimes}</Text>
+                    <Text style={[T.smMedium, { color: habitColor }]}>{step.completedTimes}</Text>
                     <Text style={T.xs}>times</Text>
                   </View>
                 </View>
@@ -248,11 +280,11 @@ export function HabitDetail({ habit }: HabitDetailProps) {
       {streak && (
         <View style={[Cards.compact]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing[2] }}>
-            <Text style={T.label}>🔥 Streak</Text>
+            <Text style={T.label}>{isBad ? '🛡️ Clean Streak' : '🔥 Streak'}</Text>
             <Text style={[T.sm, { color: Colors.warning }]}>{streak.current} days</Text>
           </View>
           {streak.lastCompletedDate && (
-            <Text style={T.caption}>Last completed: {streak.lastCompletedDate}</Text>
+            <Text style={T.caption}>Last {isBad ? 'triggered' : 'completed'}: {streak.lastCompletedDate}</Text>
           )}
         </View>
       )}
