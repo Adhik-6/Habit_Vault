@@ -314,7 +314,7 @@ export default function SettingsScreen() {
             </View>
             <View style={{ width: 1, height: 40, backgroundColor: Colors.border }} />
             <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text style={T.scoreSm}>v3.0</Text>
+              <Text style={T.scoreSm}>v3.2.0</Text>
               <Text style={T.caption}>Version</Text>
             </View>
           </View>
@@ -423,7 +423,7 @@ export default function SettingsScreen() {
               All data stays on your device.
             </Text>
             <Text style={[T.xs, { color: Colors.textMuted, marginTop: Spacing[1] }]}>
-              Version {Constants.expoConfig?.version ?? '3.0.0'}
+              Version {Constants.expoConfig?.version ?? '3.2.0'}
             </Text>
             <View style={[Layout.row, { gap: Spacing[2], marginTop: Spacing[2] }]}>
               <View

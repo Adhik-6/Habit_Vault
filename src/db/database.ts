@@ -31,20 +31,27 @@ export async function initDatabase(): Promise<void> {
     await _db.execAsync('PRAGMA foreign_keys = ON;');
     await _db.execAsync('PRAGMA cache_size = -8000;'); // 8 MB cache
 
-    // Ensure the "Bad Habits" system category always exists (in case it got deleted)
+    // Migrations table must exist before anything else
+    await _db.execAsync(CREATE_MIGRATIONS_TABLE);
+
+    await _runMigrations(_db);
+
+    // Ensure the "Bad Habits" system category always exists (in case it got deleted).
+    // NOTE: This MUST run AFTER migrations, because migration v1 creates the
+    // categories table.  On a fresh install the table won't exist yet otherwise.
     await _db.runAsync(
       `INSERT OR IGNORE INTO categories (id, name, icon, color, sortOrder, createdAt)
        VALUES (?, 'Bad Habits', 'skull-outline', '#EF4444', 9999, ?)`,
       [BAD_HABITS_CATEGORY_ID, new Date().toISOString()],
     );
 
-    // Migrations table must exist before anything else
-    await _db.execAsync(CREATE_MIGRATIONS_TABLE);
-
-    await _runMigrations(_db);
-
     console.log('[DB] habitvault.db ready');
-  })();
+  })().catch((err) => {
+    // Clear cached promise so the next call can retry initialisation
+    _initPromise = null;
+    _db = null;
+    throw err;
+  });
 
   return _initPromise;
 }
@@ -75,25 +82,37 @@ const MIGRATIONS: Migration[] = [
   {
     version: 1,
     up: async (db) => {
-      // Create tables in dependency order
+      // Create ALL tables in dependency order.
+      // On a fresh install this is the first migration that runs, so every
+      // table must be created here using the current DDL (which already
+      // contains columns added by later migrations like isBadHabit, stepValue).
       await db.execAsync(CREATE_CATEGORIES_TABLE);
       await db.execAsync(CREATE_HABITS_TABLE);
       await db.execAsync(CREATE_HABIT_LOGS_TABLE);
       await db.execAsync(CREATE_MOOD_LOGS_TABLE);
       await db.execAsync(CREATE_FAILURE_REASONS_TABLE);
       await db.execAsync(CREATE_ACHIEVEMENTS_TABLE);
-      // Indexes
+      await db.execAsync(CREATE_STREAK_TARGETS_TABLE);
+      // Indexes (streak_targets index is created by v7, not here)
       for (const sql of CREATE_INDEXES) {
         await db.execAsync(sql);
       }
+      // Also create streak_targets index here for fresh installs
+      await db.execAsync('CREATE INDEX IF NOT EXISTS idx_streak_targets_habitId ON streak_targets(habitId);');
     },
   },
   {
     version: 2,
     up: async (db) => {
-      // Rename stacks to categories
-      await db.execAsync('ALTER TABLE stacks RENAME TO categories;');
-      await db.execAsync('ALTER TABLE habits RENAME COLUMN stackId TO categoryId;');
+      // Rename stacks → categories (upgrade path from v1 of the app).
+      // On a fresh install the table is already called 'categories', so
+      // the rename would fail — that's expected and safe to ignore.
+      try {
+        await db.execAsync('ALTER TABLE stacks RENAME TO categories;');
+        await db.execAsync('ALTER TABLE habits RENAME COLUMN stackId TO categoryId;');
+      } catch (_e) {
+        // Table was already named 'categories' (fresh install) — nothing to do.
+      }
     },
   },
   {
@@ -107,10 +126,15 @@ const MIGRATIONS: Migration[] = [
   {
     version: 4,
     up: async (db) => {
-      // Bad habit tracking: add isBadHabit flag to habits table
-      await db.execAsync(
-        'ALTER TABLE habits ADD COLUMN isBadHabit INTEGER NOT NULL DEFAULT 0',
-      );
+      // Bad habit tracking: add isBadHabit flag to habits table.
+      // On a fresh install the column already exists in CREATE_HABITS_TABLE DDL.
+      try {
+        await db.execAsync(
+          'ALTER TABLE habits ADD COLUMN isBadHabit INTEGER NOT NULL DEFAULT 0',
+        );
+      } catch (_e) {
+        // Column already exists (fresh install) — safe to ignore.
+      }
       // Seed the locked "Bad Habits" system category
       await db.runAsync(
         `INSERT OR IGNORE INTO categories (id, name, icon, color, sortOrder, createdAt)
@@ -151,8 +175,13 @@ const MIGRATIONS: Migration[] = [
   {
     version: 8,
     up: async (db) => {
-      // Add stepValue to habits table
-      await db.execAsync('ALTER TABLE habits ADD COLUMN stepValue REAL NOT NULL DEFAULT 1;');
+      // Add stepValue to habits table.
+      // On a fresh install the column already exists in CREATE_HABITS_TABLE DDL.
+      try {
+        await db.execAsync('ALTER TABLE habits ADD COLUMN stepValue REAL NOT NULL DEFAULT 1;');
+      } catch (_e) {
+        // Column already exists (fresh install) — safe to ignore.
+      }
     },
   },
   {

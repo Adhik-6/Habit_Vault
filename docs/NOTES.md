@@ -9,6 +9,7 @@
 8. `npx eas submit -p android --latest` - Take the latest build from EAS and upload it to the Google Play Store.
 9. `npx expo install <package-name>` - Install a specific package using Expo's package manager (use this instead of `npm install` for Expo packages)
 10. `npx expo run:android` - Run the app on an Android emulator or connected device
+11. `cd android && ./gradlew --stop` - Stop the gradlew daemon process.
 
 
 ### Generating the APK using eas
@@ -66,6 +67,97 @@ npx eas build -p android --profile production --clear-cache
 5. `npx eas build -p android --profile production --clear-cache`
 6. Install APK
 
+### To generate a production ready APK
+1. `npx expo prebuild --platform android --clean` - generates the native `./android` folder.
+2. In `android/app/build.gradle`.
+```gradle
+android {
+    // ... your existing configurations ...
+
+    externalNativeBuild {
+        cmake {
+            // Redirects massive generated C++ paths to a short directory
+            buildStagingDirectory "D:/newapp_cxx" 
+        }
+    }
+}
+```
+3. In the `android/gradle.properties`, edit the existing `org.gradle.jvmargs`:
+```properties
+org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
+```
+4. Generate Keystore and sign it. Do as directed in "#### Generating Keystore and Signing"
+5. Now build the apk: 
+```bash
+cd android
+./gradlew assembleRelease
+```
+
+#### Generating Keystore and signing it
+
+##### Step 1: Generate the Production Keystore
+1. Navigate to the `android/app` directory:
+```bash
+cd android/app
+```
+2. Run this command to generate the keystore file. (You can change `my-upload-key` and `my-key-alias` to whatever you want):
+```bash
+keytool -genkeypair -v -storetype PKCS12 -keystore my-upload-key.keystore -alias my-key-alias -keyalg RSA -keysize 2048 -validity 10000
+
+```
+3. It will prompt you to create a password and answer a few questions about your name and organization. **Memorize or securely save this password and alias.** If you lose this keystore file or password, you will not be able to update your app on the Play Store later.
+
+##### Step 2: Add Keystore Credentials to Gradle
+
+1. Open `android/gradle.properties` in VSCode.
+2. Add these lines at the bottom, replacing the dummy values with the actual password and alias you just created:
+```properties
+MYAPP_UPLOAD_STORE_FILE=my-upload-key.keystore
+MYAPP_UPLOAD_KEY_ALIAS=my-key-alias
+MYAPP_UPLOAD_STORE_PASSWORD=your_keystore_password
+MYAPP_UPLOAD_KEY_PASSWORD=your_keystore_password
+```
+
+##### Step 3: Link the Keystore in `build.gradle`
+
+1. Open `android/app/build.gradle`.
+2. Look for the `signingConfigs {}` block. It usually just has a `debug` configuration. Add the `release` configuration right below it:
+```gradle
+signingConfigs {
+    debug {
+        storeFile file('debug.keystore')
+        storePassword 'android'
+        keyAlias 'androiddebugkey'
+        keyPassword 'android'
+    }
+    // ADD THIS RELEASE BLOCK:
+    release {
+        if (project.hasProperty('MYAPP_UPLOAD_STORE_FILE')) {
+            storeFile file(MYAPP_UPLOAD_STORE_FILE)
+            storePassword MYAPP_UPLOAD_STORE_PASSWORD
+            keyAlias MYAPP_UPLOAD_KEY_ALIAS
+            keyPassword MYAPP_UPLOAD_KEY_PASSWORD
+        }
+    }
+}
+```
+3. Scroll down slightly to the `buildTypes {}` block and update the `release` section so it actually uses the new signing config:
+```gradle
+buildTypes {
+    debug {
+        signingConfig signingConfigs.debug
+    }
+    release {
+        // CHANGE THIS LINE:
+        signingConfig signingConfigs.release
+        
+        minifyEnabled enableProguardInReleaseBuilds
+        proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+    }
+}
+```
+
+
 ### Workflow in local building
 1. Make changes
 2. `npx expo prebuild --platform android --clean` - Only needed for first time initialization.
@@ -82,6 +174,17 @@ npx eas build -p android --profile production --clear-cache
 ### A Note on Counter Heatmap Intensity
 - Regarding your note about the "Counter" heatmap not getting brighter: GitHub's actual contribution algorithm works by finding the highest activity recorded across the entire year, and grading every other day relative to that single maximum value.
 - If you only log activity on a single day (even if you click it 100 times), that day is technically the "max" value for the year, so it will correctly default to the absolute brightest tier (Tier 4). It will only start showing different colored tiers once you log activity on a second day and compare the two days against each other.
+
+### Long File path issue
+1. Add the below code in `android/app/build.gradle`:
+```gradle
+externalNativeBuild {
+        cmake {
+            // This redirects all the massive generated C++ paths to a short directory
+            buildStagingDirectory "D:/ht_cxx" // change the directory name according to the project
+        }
+    }
+```
 
 # Prompt to update the AGENTS.md
 

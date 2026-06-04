@@ -240,6 +240,11 @@ export function HabitCard({ habit, onLongPress, onLogReason }: HabitCardProps) {
                     returnKeyType="done"
                   />
                 </Animated.View>
+                {isFocused && (
+                  <TouchableOpacity onPress={handleQuantitySubmit} style={{ padding: 4 }}>
+                    <Ionicons name="checkmark-circle" size={24} color={habitColor} />
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -287,8 +292,8 @@ export function HabitCard({ habit, onLongPress, onLogReason }: HabitCardProps) {
                 onPress={() => onLogReason(habit.id)}
                 style={isBad ? {} : [Buttons.icon, { 
                   width: 28, height: 28, borderRadius: 14, 
-                  backgroundColor: habit.todayLog?.failureReason ? ac.accent : 'transparent', 
-                  borderWidth: 1, borderColor: ac.accent 
+                  backgroundColor: habit.todayLog?.failureReason ? habitColor : 'transparent', 
+                  borderWidth: 1, borderColor: habitColor 
                 }]}
               >
                 {isBad ? (
@@ -309,7 +314,7 @@ export function HabitCard({ habit, onLongPress, onLogReason }: HabitCardProps) {
                   <Ionicons 
                     name="help" 
                     size={16} 
-                    color={habit.todayLog?.failureReason ? "#fff" : ac.accent} 
+                    color={habit.todayLog?.failureReason ? "#fff" : habitColor} 
                   />
                 )}
               </TouchableOpacity>

@@ -31,7 +31,7 @@
 
 </div>
 
-<p align="center">HabitVault is a comprehensive, offline-first mobile application built to seamlessly integrate into your daily life. It features a cinematic dark mode, dynamic dashboards, rich analytics, and an intuitive library to organize all your habits effectively.</p>
+<p align="center">HabitVault is a comprehensive, offline-first mobile application built to seamlessly integrate into your daily life. It features a cinematic dark mode, dynamic dashboards, rich analytics, and an intuitive library to organize all your habits effectively. This was entirely vibe coded in Antigravity IDE.</p>
 
 <br />
 
@@ -99,7 +99,7 @@ Building sustainable habits requires a system that is both engaging and friction
 <!-- Features -->
 ### :dart: Features
 
-- **Dynamic Tracking:** Log boolean habits, quantitative habits (minutes, pages, with custom step sizes), or composite checklists.
+- **Dynamic Tracking:** Log boolean habits, quantitative habits (minutes, pages, with custom step sizes and inline save buttons), or composite checklists.
 - **Bad Habit Tracking:** Specifically track and break bad habits with inverted analytics and distinct visual alerts.
 - **Unified Dashboard:** Collapsible 7-day strip or full monthly calendar view with progress rings.
 - **Categorization System:** Group your habits into custom categories with unique icons and colors.
@@ -109,7 +109,7 @@ Building sustainable habits requires a system that is both engaging and friction
   - Streak tracking (Current & Longest, frequency-aware).
   - 30-Day "Strength Score".
   - Mood vs. Habit completion trend line charts.
-  - In-depth Failure Reason Analysis for missed habits.
+  - In-depth Failure Reason Analysis for missed habits with category-colored indicators.
 - **Offline First:** 100% local data storage ensuring instantaneous speed and total privacy.
 - **Daily Reminders:** Set custom local notifications to remind you to log your mood and habits.
 - **Data Portability:** Export and import your entire history via JSON (encrypted or plain text options available).

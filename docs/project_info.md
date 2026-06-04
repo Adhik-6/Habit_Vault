@@ -186,7 +186,7 @@ Absolutely strict custom design system. Do NOT use standard React Native `StyleS
 
 ## 12. Component Catalog
 <!-- Updated: Noted new components and updates -->
-- **`HabitCard`**: Includes inline `TextInput` counter for quantity habits, decimal support, and `stepValue` increments. Bad habit occurrences use `LinearGradient` dots.
+- **`HabitCard`**: Includes inline `TextInput` counter for quantity habits with an inline checkmark save button, decimal support, and `stepValue` increments. Bad habit occurrences use `LinearGradient` dots. Failure reason "?" buttons map to the habit's category color.
 - **`HabitForm`**: Unified form for all habit types. Includes optional "Step Size" input for quantity habits. The `duration` type form has been permanently removed.
 - **`MoodTrendChart` / `WeekdayBarChart`**: Unified, reusable chart components used across Dashboard and Insights.
 - **`Calendar`**: Overflow logic updated (max 3 dots, opacity blend). Bad habit dots use `LinearGradient`.
@@ -198,7 +198,7 @@ Absolutely strict custom design system. Do NOT use standard React Native `StyleS
 ## 13. Routing & Navigation Map (`app/`)
 Uses Expo Router.
 
-- **`_layout.tsx` (Root)**: Initializes DB. 4-step boot sequence with 150ms WAL delay. Patches Expo notifications warning.
+- **`_layout.tsx` (Root)**: Initializes DB with robust idempotent migrations and auto-retry logic on failure. 4-step boot sequence with 150ms WAL delay. Patches Expo notifications warning.
 - **`(tabs)/_layout.tsx`**: Bottom Tab Navigator. `unmountOnBlur` is `false` for the Habits tab to mitigate white screen flashes.
 - **`(tabs)/index.tsx`**: The "Today" screen.
 - **`(tabs)/dashboard.tsx`**: High-level KPIs, global heatmaps, Mood Trend chart.
@@ -213,7 +213,7 @@ Uses Expo Router.
 ## 14. Feature Deep-Dives
 <!-- New: Added custom streak targets, failure reason logging, export updates -->
 - **Custom Streak Targets (Goals)**: Users can define an N-day goal for any habit. Managed via `streak_targets` table. UI lives in `Insights > Goals`. Bad habit goals correctly count clean streaks.
-- **Failure Reason Logging**: Missed good habits in the past display a "?" icon. Long-pressing opens a sheet to log a predefined `GoodHabitFailureReason` or custom text. Data is persisted to `habit_logs.failureReason` and displayed in `Insights > Patterns`.
+- **Failure Reason Logging**: Missed good habits in the past display a "?" icon matching the habit's category color. Long-pressing opens a sheet to log a predefined `GoodHabitFailureReason` or custom text. Data is persisted to `habit_logs.failureReason` and displayed in `Insights > Patterns`.
 - **Data Export & Import**:
   - Export supports both Plain JSON (no encryption) and Encrypted JSON (AES-256).
   - Backups include ALL tables (including streak targets and categories) and ALL AsyncStorage configs (accent color, notifications, auth).

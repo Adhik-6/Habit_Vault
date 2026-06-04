@@ -355,3 +355,4 @@ $RECYCLE.BIN/
 
 apk_builds/
 *.apk
+not_git/

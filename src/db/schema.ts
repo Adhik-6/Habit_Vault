@@ -99,6 +99,9 @@ export const CREATE_ACHIEVEMENTS_TABLE = `
 `;
 
 // ── Performance indexes ──────────────────────
+// NOTE: streak_targets index is NOT here — it's created by migration v7
+// alongside the table itself.  Including it here would crash migration v1
+// on fresh installs because the table doesn't exist yet.
 export const CREATE_INDEXES: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_habit_logs_habitId      ON habit_logs(habitId);`,
   `CREATE INDEX IF NOT EXISTS idx_habit_logs_date         ON habit_logs(date);`,
@@ -107,7 +110,6 @@ export const CREATE_INDEXES: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_habits_active           ON habits(archivedAt);`,
   `CREATE INDEX IF NOT EXISTS idx_failure_reasons_habit   ON failure_reasons(habitId);`,
   `CREATE INDEX IF NOT EXISTS idx_mood_logs_date          ON mood_logs(date);`,
-  `CREATE INDEX IF NOT EXISTS idx_streak_targets_habitId  ON streak_targets(habitId);`,
 ];
 
 export const CREATE_STREAK_TARGETS_TABLE = `

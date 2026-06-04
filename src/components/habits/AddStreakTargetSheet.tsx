@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useHabitStore } from '@store/useHabitStore';
 import { useAnalyticsStore } from '@store/useAnalyticsStore';
@@ -116,6 +116,10 @@ export function AddStreakTargetSheet({ onClose, editingTargetId }: { onClose: ()
     <Modal transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={Sheet.backdrop} activeOpacity={1} onPress={onClose} />
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ justifyContent: 'flex-end' }}
+        >
         <View style={[Sheet.container, { maxHeight: '90%' }]}>
           <View style={Sheet.handle} />
           
@@ -280,6 +284,7 @@ export function AddStreakTargetSheet({ onClose, editingTargetId }: { onClose: ()
             </View>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
